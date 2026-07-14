@@ -1,0 +1,25 @@
+{
+  "name": "@hyrum/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --sourcemap --clean",
+    "clean": "rm -rf dist coverage",
+    "dev": "tsx watch src/index.ts",
+    "lint": "biome check src",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hyrum/db": "workspace:*",
+    "@hyrum/env": "workspace:*",
+    "@hyrum/logger": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "vitest": "^4.0.18"
+  }
+}

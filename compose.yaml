@@ -1,0 +1,59 @@
+name: hyrum
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    environment:
+      POSTGRES_DB: hyrum
+      POSTGRES_USER: hyrum
+      POSTGRES_PASSWORD: hyrum
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hyrum -d hyrum"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/hyrum-development &&
+        mc anonymous set none local/hyrum-development
+
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/wiremock:/home/wiremock
+    command: ["--global-response-templating", "--verbose"]
+
+volumes:
+  postgres-data:
+  minio-data:

@@ -1,0 +1,11 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gosec
+    - revive
+formatters:
+  enable:
+    - gofmt
+    - gofumpt

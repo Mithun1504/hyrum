@@ -1,0 +1,37 @@
+{
+  "name": "hyrum",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "22.x",
+    "pnpm": ">=10.33.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "clean": "turbo run clean && rm -rf .turbo",
+    "db:check": "pnpm --filter @hyrum/db db:check",
+    "db:generate": "pnpm --filter @hyrum/db db:generate",
+    "db:migrate": "pnpm --filter @hyrum/db db:migrate",
+    "db:studio": "pnpm --filter @hyrum/db db:studio",
+    "dev": "turbo run dev --parallel",
+    "format": "biome check --write . && prettier --write '**/*.{md,yml,yaml}'",
+    "format:check": "biome check . && prettier --check '**/*.{md,yml,yaml}'",
+    "lint": "turbo run lint",
+    "prepare": "node scripts/install-hooks.mjs",
+    "test": "turbo run test",
+    "test:e2e": "pnpm --filter @hyrum/web test:e2e",
+    "typecheck": "turbo run typecheck",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:check && pnpm build && pnpm verify:go",
+    "verify:go": "go test ./... && go vet ./... && go build ./cmd/hyrum-agent ./cmd/hyrum-replay"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@changesets/cli": "^2.29.8",
+    "@types/node": "^22.19.11",
+    "lefthook": "^1.13.6",
+    "prettier": "^3.8.2",
+    "turbo": "^2.8.10",
+    "typescript": "^5.9.3"
+  }
+}
