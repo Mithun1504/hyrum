@@ -71,7 +71,8 @@ export async function failJob(db: Database, job: ClaimedJob, error: Error): Prom
       status: terminal ? "dead" : "pending",
       leaseOwner: null,
       leaseExpiresAt: null,
-      lastError: error.message.slice(0, 2_000),
+      lastErrorCode: error.name.slice(0, 100),
+      lastErrorSummary: error.message.slice(0, 2_000),
       runAfter: new Date(Date.now() + delaySeconds * 1_000),
     })
     .where(eq(jobs.id, job.id));
