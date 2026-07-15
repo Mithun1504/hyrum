@@ -18,3 +18,4 @@ export function createDatabaseClient(connectionString: string, max = 10): Databa
 
 export * from "./jobs";
 export * from "./schema";
+export * from "./tenancy";
