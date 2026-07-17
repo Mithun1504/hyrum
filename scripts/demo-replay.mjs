@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const children = [];
+const imageDigestPattern = /^sha256:[a-f0-9]{64}$/;
 
 function start(command, args, env = {}) {
   const child = spawn(command, args, {
@@ -66,6 +67,9 @@ try {
     "{{.Image}}",
     candidateContainer,
   ]);
+  if (!imageDigestPattern.test(baseImageDigest) || !imageDigestPattern.test(candidateImageDigest)) {
+    throw new Error("Demo image digests must be immutable SHA-256 values");
+  }
   if (baseImageDigest === candidateImageDigest) {
     throw new Error("Base and candidate demo images must have distinct immutable digests");
   }
@@ -101,8 +105,10 @@ try {
     runner_version: report.runner_version,
     policy_id: report.policy_id,
     policy_version: report.policy_version,
-    base_image_digest: report.base_image_digest,
-    candidate_image_digest: report.candidate_image_digest,
+    image_digests_valid:
+      imageDigestPattern.test(report.base_image_digest) &&
+      imageDigestPattern.test(report.candidate_image_digest),
+    image_digests_distinct: report.base_image_digest !== report.candidate_image_digest,
     repeated_runs: report.runs,
     case_count: report.results.length,
     stable_case_count: stableCases,
