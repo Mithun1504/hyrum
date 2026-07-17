@@ -1,7 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalEnv": ["NODE_ENV", "CI"],
+  "globalEnv": [
+    "NODE_ENV",
+    "CI",
+    "DEMO_VARIANT",
+    "HOST",
+    "PORT",
+    "NEXT_DIST_DIR",
+    "HYRUM_ACCEPTANCE_POSTGRES_PORT",
+    "HYRUM_ACCEPTANCE_MINIO_API_PORT",
+    "HYRUM_ACCEPTANCE_MINIO_CONSOLE_PORT"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

@@ -1,0 +1,63 @@
+openapi: 3.1.0
+info:
+  title: Hyrum demo commerce API
+  version: 1.0.0
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+      responses:
+        "200":
+          description: Product page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+  /discounts/{code}:
+    get:
+      operationId: validateDiscount
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        "422":
+          description: Discount cannot be applied
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+components:
+  schemas:
+    Product:
+      type: object
+      required: [id, name, price_cents]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        price_cents: { type: integer }

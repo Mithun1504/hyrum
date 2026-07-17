@@ -4,6 +4,7 @@ import { jobs } from "./schema";
 
 export interface ClaimedJob {
   id: string;
+  organizationId: string;
   type: string;
   payload: unknown;
   attempts: number;
@@ -20,9 +21,11 @@ export async function claimJobs(db: Database, workerId: string, limit = 10): Pro
       .from(jobs)
       .where(
         and(
-          eq(jobs.status, "pending"),
           lte(jobs.runAfter, now),
-          or(sql`${jobs.leaseExpiresAt} is null`, lte(jobs.leaseExpiresAt, now)),
+          or(
+            eq(jobs.status, "pending"),
+            and(eq(jobs.status, "running"), lte(jobs.leaseExpiresAt, now)),
+          ),
         ),
       )
       .orderBy(asc(jobs.runAfter))
@@ -44,6 +47,7 @@ export async function claimJobs(db: Database, workerId: string, limit = 10): Pro
         .where(eq(jobs.id, id))
         .returning({
           id: jobs.id,
+          organizationId: jobs.organizationId,
           type: jobs.type,
           payload: jobs.payload,
           attempts: jobs.attempts,
@@ -55,14 +59,19 @@ export async function claimJobs(db: Database, workerId: string, limit = 10): Pro
   });
 }
 
-export async function completeJob(db: Database, id: string): Promise<void> {
+export async function completeJob(db: Database, id: string, workerId: string): Promise<void> {
   await db
     .update(jobs)
     .set({ status: "succeeded", leaseOwner: null, leaseExpiresAt: null })
-    .where(eq(jobs.id, id));
+    .where(and(eq(jobs.id, id), eq(jobs.leaseOwner, workerId)));
 }
 
-export async function failJob(db: Database, job: ClaimedJob, error: Error): Promise<void> {
+export async function failJob(
+  db: Database,
+  job: ClaimedJob,
+  workerId: string,
+  error: Error,
+): Promise<void> {
   const terminal = job.attempts >= job.maxAttempts;
   const delaySeconds = Math.min(2 ** job.attempts, 300);
   await db
@@ -74,5 +83,5 @@ export async function failJob(db: Database, job: ClaimedJob, error: Error): Prom
       lastError: error.message.slice(0, 2_000),
       runAfter: new Date(Date.now() + delaySeconds * 1_000),
     })
-    .where(eq(jobs.id, job.id));
+    .where(and(eq(jobs.id, job.id), eq(jobs.leaseOwner, workerId)));
 }

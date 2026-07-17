@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "corpus": "fixtures/demo/traffic-50000.ndjson.gz",
+  "record_count": 50000,
+  "deterministic_runs": 2,
+  "output_sha256": "d9d46cd7fdb8bfdfc6acc5a874d3fbd4b1eb24359672403ea14f175f7c28f73a",
+  "replay_stability_target": 0.99,
+  "tier1": {
+    "tp": 10000,
+    "fp": 0,
+    "fn": 0,
+    "tn": 40000,
+    "precision": 1,
+    "recall": 1,
+    "f1": 1
+  },
+  "tier2": {
+    "tp": 5000,
+    "fp": 0,
+    "fn": 0,
+    "tn": 45000,
+    "precision": 1,
+    "recall": 1,
+    "f1": 1
+  },
+  "hard_negative_violations": 0
+}

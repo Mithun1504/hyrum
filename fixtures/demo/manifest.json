@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "organization_id": "00000000-0000-4000-8000-000000000001",
+  "record_count": 50000,
+  "uncompressed_sha256": "dd68b6820e4784ff8d469967cd9074c79f5303dd2ea622f52974a2a26150b0d8",
+  "generated_by": "demo/consumers/generate.mjs",
+  "consumers": {
+    "consumer-a-scripted": {
+      "tier": "T1",
+      "behavior": "response next_cursor echoed as request cursor"
+    },
+    "consumer-b-scripted": {
+      "tier": "T2",
+      "behavior": "different request branches follow two 422 error templates"
+    },
+    "consumer-c-scripted": {
+      "tier": "T3",
+      "behavior": "legacy_id exposure only"
+    },
+    "consumer-negative-scripted": {
+      "tier": "none",
+      "behavior": "hard negative"
+    }
+  }
+}

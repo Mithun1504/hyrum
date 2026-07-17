@@ -16,6 +16,23 @@ jobs:
   typescript:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.6-alpine
+        env:
+          POSTGRES_DB: hyrum
+          POSTGRES_USER: hyrum
+          POSTGRES_PASSWORD: hyrum
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hyrum -d hyrum"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://hyrum:hyrum@127.0.0.1:5432/hyrum
+      RLS_TEST_ADMIN_URL: postgresql://hyrum:hyrum@127.0.0.1:5432/hyrum
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
@@ -25,8 +42,37 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.24.x"
+          cache: true
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
       - run: pnpm verify
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Build deploy image
+        run: docker build --file infra/docker/control-plane.Dockerfile --tag hyrum-control-plane:ci .
+      - name: Smoke control-plane and worker entrypoints
+        run: |
+          docker run --rm hyrum-control-plane:ci node control-plane/dist/server.js --verify-bundle
+          docker run --rm hyrum-control-plane:ci node worker/dist/index.js --verify-bundle
+      - name: Check control-plane health and readiness
+        run: |
+          docker run --detach --rm --name hyrum-control-plane-ci --network host \
+            --env NODE_ENV=test \
+            --env DATABASE_URL="$DATABASE_URL" \
+            hyrum-control-plane:ci
+          trap 'docker stop hyrum-control-plane-ci' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4000/health >/dev/null \
+              && curl --fail --silent http://127.0.0.1:4000/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs hyrum-control-plane-ci
+          exit 1
 
   go:
     runs-on: ubuntu-latest

@@ -1,74 +1,127 @@
 # Hyrum
 
-Hyrum is the evidence-backed ledger of an API's accidental contracts. This repository currently
-contains the production-grade project foundation only; capture, inference, replay, and gate business
-features are intentionally not implemented yet.
+Prevent accidental API breakage with traffic receipts and deterministic differential replay.
 
-The product requirements live in [`docs/PRD.md`](docs/PRD.md). The approved architecture and
-technology decisions live in [`docs/TECH_STACK.md`](docs/TECH_STACK.md) and must be reviewed before
-changing foundational code.
+[![CI](https://github.com/Mithun1504/hyrum/actions/workflows/ci.yml/badge.svg)](https://github.com/Mithun1504/hyrum/actions/workflows/ci.yml)
+![Node 22](https://img.shields.io/badge/Node-22-339933?logo=nodedotjs&logoColor=white)
+![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)
 
-## Quick start
+Hyrum gives platform leads and SREs evidence for high-stakes API changes. It captures redacted,
+session-correlated behavior, builds a per-consumer ledger of undocumented contracts, and blocks only
+when stable replay proves that a change breaks T1 echo evidence.
 
-Prerequisites: Node.js 22 LTS, pnpm 10.33.0 through Corepack, Go 1.24+, and Docker with Compose v2.
+```mermaid
+flowchart LR
+  A["Go capture agent"] -->|"redacted batches"| B["Control plane"]
+  B --> C["Evidence ledger"]
+  D["Base and candidate images"] --> E["Differential replay"]
+  E -->|"signed report"| B
+  C --> F["T1 block, T2 warn, T3 exposure"]
+  B --> G["Review workspace"]
+```
+
+## Install
+
+Prerequisites: Node.js 22 LTS, pnpm 10.33.0, Go 1.24+, and Docker Compose v2.
 
 ```bash
 corepack enable
-pnpm install
-cp .env.example .env
-docker compose up -d postgres minio minio-init wiremock
-pnpm db:generate
-pnpm db:migrate
+corepack prepare pnpm@10.33.0 --activate
+pnpm install --frozen-lockfile
+cp .env.example .env.local
+docker compose up -d postgres minio minio-init
+DATABASE_URL=postgresql://hyrum:hyrum@127.0.0.1:5432/hyrum pnpm db:migrate
+```
+
+## Usage
+
+Run the production-faithful acceptance path with its isolated default ports 4400, 55436, 19000,
+and 19001 available. Override the database and object-storage ports with the
+`HYRUM_ACCEPTANCE_*_PORT` variables when needed:
+
+```bash
+pnpm demo:acceptance
+```
+
+The command generates and evaluates 50,000 scripted consumer events, sends a representative
+redacted slice through authenticated capture ingestion, populates the real ledger, replays base and
+candidate Docker images, signs the report with Ed25519, and verifies the server-computed gate. Its
+machine-readable result is written to `tmp/demo-acceptance-report.json`; temporary containers and
+credentials are removed on exit.
+
+For local product development:
+
+```bash
+docker compose up -d postgres minio minio-init
 pnpm dev
 ```
 
 - Web: <http://localhost:3000>
-- Control plane: <http://localhost:4000>
-- OpenAPI UI: <http://localhost:4000/docs>
+- Control plane and OpenAPI: <http://localhost:4000> and <http://localhost:4000/docs>
 - MinIO console: <http://localhost:9001>
-- WireMock: <http://localhost:8080>
 
-WorkOS credentials are only required to enter `/app`; the public landing page and liveness endpoints
-remain usable without them. See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for full setup and
-verification instructions.
+WorkOS credentials are required for real human sessions. The explicit non-production auth/data
+bypass is reserved for automated browser tests and mock-matched local design QA; production never
+falls back to fixtures.
 
-## Repository map
+## Features
 
-```text
-apps/web                 Next.js 16 web application
-apps/control-plane       Fastify REST API and OpenAPI document
-apps/worker              Postgres-backed job runner
-packages/api-client      Reusable validated control-plane client
-packages/contracts       Shared Zod API and authorization contracts
-packages/db              Drizzle schema, migrations, database and job primitives
-packages/env             Environment validation
-packages/integrations    GitHub and Slack integration contracts
-packages/logger          Redacting structured logger
-packages/openai          OpenAI client and advisory-output boundary
-cmd/hyrum-agent          Customer-side Go process entry point
-cmd/hyrum-replay         CI-side Go replay entry point
-internal                 Shared Go packages
-infra                    Local services and production container definitions
-```
+- **Prove dependencies, not exposure:** T1 requires a response-only value to reappear in a later
+  request from the same complete consumer session.
+- **Keep inference out of the gate:** deterministic Go extractors and replay own behavior-change
+  facts; GPT-5.6 can label, explain, rank, or draft only.
+- **Review the receipt:** redacted evidence metadata survives object-store outages, while content is
+  stored under tenant-prefixed, content-addressed S3/R2 keys.
+- **Contain every tenant boundary:** organization context is explicit in APIs, jobs, storage keys,
+  and forced Postgres row-level security policies.
+- **Reject forged gate reports:** replay reports require immutable image digests, an Ed25519
+  signature bound to the machine identity, active tenant claims, and a server-recomputed decision.
+- **Make assertions expire:** pinned compatibility assertions require ownership, a reason, and an
+  expiry; replay signs per-assertion pass/fail coverage, missing or failed active assertions block,
+  and the worker marks due assertions expired while emitting progress events.
 
-## Core commands
+## API and binaries
+
+The Fastify control plane exposes validated `/v1` endpoints for capture batches, ledger and receipt
+reads, assertions, policies, OpenAPI uploads and drafts, replay reports, and progress SSE. OpenAPI
+3.1 documentation is served from `/docs`.
 
 ```bash
-pnpm dev          # start web, API, and worker in watch mode
-pnpm test         # TypeScript unit/component tests
-pnpm test:e2e     # Playwright browser test
-pnpm lint         # ESLint and Biome checks
-pnpm typecheck    # strict TypeScript checks
-pnpm build        # production builds
-pnpm verify       # complete TypeScript and Go handoff gate
-go test ./...     # focused Go unit tests
+go build ./cmd/hyrum-agent ./cmd/hyrum-replay
+pnpm --filter @hyrum/control-plane build
+pnpm --filter @hyrum/worker build
+pnpm --filter @hyrum/web build
 ```
 
-## Architectural guardrails
+Repository details, environment variables, auth setup, and service conventions are in
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Product and architecture decisions remain in
+[`docs/PRD.md`](docs/PRD.md) and [`docs/TECH_STACK.md`](docs/TECH_STACK.md).
 
-- Deterministic code measures behavior and owns gate decisions. OpenAI output is advisory only.
-- Raw traffic and secrets must be redacted before leaving the customer trust boundary.
-- T1 requires echo evidence; T2 warns; T3 records exposure and never blocks.
-- Capture and replay must share the same versioned extractor implementation.
-- Do not add Redis, Kafka, vector search, Kubernetes, or Temporal without measured need and an
-  approved architecture update.
+## Verification
+
+```bash
+pnpm verify
+pnpm test:e2e
+pnpm demo:acceptance
+```
+
+`pnpm verify` covers formatting, lint, strict TypeScript, unit and demo tests, deterministic
+evaluation/replay, Drizzle migration checks, production builds, Go tests/vet, and both Go binaries.
+Browser tests are separate because they install and launch Chromium.
+
+## Contributing
+
+Read [`AGENTS.md`](AGENTS.md), the approved PRD, and the approved stack before changing code. Keep
+business rules canonical, pass `organization_id` across every data boundary, generate Drizzle SQL
+for schema changes, and add evidence proportional to the risk.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm test:e2e
+git diff --check
+```
+
+## License
+
+No open-source license has been granted. Copyright remains with the repository owner.

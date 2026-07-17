@@ -1,7 +1,21 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "files": {
-    "includes": ["**", "!!**/node_modules", "!!**/.next", "!!**/dist", "!!**/coverage", "!!docs"]
+    "includes": [
+      "**",
+      "!!**/node_modules",
+      "!!**/.next",
+      "!!**/.next-*",
+      "!!**/.turbo",
+      "!!**/dist",
+      "!!**/coverage",
+      "!!**/playwright-report",
+      "!!**/test-results",
+      "!!**/tmp",
+      "!!**/packages/db/migrations/meta",
+      "!!**/internal/**/testdata",
+      "!!docs"
+    ]
   },
   "formatter": {
     "enabled": true,

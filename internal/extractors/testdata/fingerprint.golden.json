@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "status": 200,
+  "shape": [
+    {
+      "path": "$",
+      "type": "object"
+    },
+    {
+      "path": "$.items",
+      "type": "array"
+    },
+    {
+      "path": "$.items[]",
+      "type": "object"
+    },
+    {
+      "path": "$.items[].id",
+      "type": "string"
+    },
+    {
+      "path": "$.items[].legacy_id",
+      "type": "null"
+    },
+    {
+      "path": "$.next_cursor",
+      "type": "string"
+    }
+  ],
+  "ordering": [
+    {
+      "path": "$.items",
+      "values": [
+        "a101568483b869d098a66df7e291400a9d84acf850303067d990fdd51d6065cb"
+      ]
+    }
+  ],
+  "masking": [
+    "$.items[].id"
+  ]
+}

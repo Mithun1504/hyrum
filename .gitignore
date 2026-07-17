@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .next/
+.next-e2e/
 .turbo/
 coverage/
 dist/

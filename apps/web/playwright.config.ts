@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+process.env.HYRUM_E2E_AUTH_BYPASS ??= "1";
+process.env.HYRUM_DEMO_DATA ??= "1";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -7,12 +10,13 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3017",
     trace: "on-first-retry",
   },
   webServer: {
-    command: "pnpm dev",
-    url: "http://127.0.0.1:3000/api/health",
+    command:
+      "NEXT_DIST_DIR=.next-e2e HYRUM_E2E_AUTH_BYPASS=1 HYRUM_DEMO_DATA=1 pnpm exec next dev --port 3017",
+    url: "http://127.0.0.1:3017/api/health",
     reuseExistingServer: !process.env.CI,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

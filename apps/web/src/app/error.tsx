@@ -14,9 +14,9 @@ export default function ErrorPage({
     <main className="mx-auto flex min-h-dvh max-w-xl items-center p-page">
       <Alert variant="destructive">
         <AlertTriangle aria-hidden="true" />
-        <AlertTitle>Something went wrong</AlertTitle>
+        <AlertTitle>Hyrum could not render this page</AlertTitle>
         <AlertDescription className="mt-2">
-          The error was recorded without sensitive request data.
+          Retry the page. If it fails again, check the control-plane logs for the request ID.
           <Button className="mt-4" variant="outline" onClick={reset}>
             Try again
           </Button>

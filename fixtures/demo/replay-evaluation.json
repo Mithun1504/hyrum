@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "corpus_digest": "sha256:dc72088f605a618045da82d2ce609d34bb7af80c761eec4459c2dbeef7209943",
+  "fixture_digest": "sha256:a19b4f02b1623a4c02d904c44b900fbb56f48fb47dd5b71e0e5b2c08c873d0b3",
+  "mask_digest": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+  "runner_version": "1.0.0",
+  "policy_id": "00000000-0000-4000-8000-000000000091",
+  "policy_version": 1,
+  "base_image_digest": "sha256:d8569f13e946417f47ee932d1690df1b2563a17db76f7aabc0668084044a1dba",
+  "candidate_image_digest": "sha256:f1179cc0feee5c3454c3e75c22f0e91c1b9203e2c9a317d93eb82870d7f805b5",
+  "repeated_runs": 3,
+  "case_count": 3,
+  "stable_case_count": 3,
+  "quarantined_case_count": 0,
+  "stability": 1,
+  "signature_algorithm": "ed25519",
+  "signature_present": true
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "api_specs" ADD COLUMN "normalized" jsonb DEFAULT '{}'::jsonb NOT NULL;

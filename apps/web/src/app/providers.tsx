@@ -6,7 +6,10 @@ import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-export function Providers({ children }: Readonly<{ children: React.ReactNode }>) {
+export function Providers({
+  children,
+  authEnabled,
+}: Readonly<{ children: React.ReactNode; authEnabled: boolean }>) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -20,13 +23,13 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
       }),
   );
 
-  return (
-    <AuthKitProvider>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <TooltipProvider>{children}</TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </AuthKitProvider>
+  const content = (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <TooltipProvider>{children}</TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
+
+  return authEnabled ? <AuthKitProvider>{content}</AuthKitProvider> : content;
 }

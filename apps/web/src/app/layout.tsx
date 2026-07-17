@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { geistMono, geistSans } from "@/lib/fonts";
+import { isDemoDataEnabled } from "@/services/control-plane";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -16,6 +17,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const authEnabled = Boolean(
+    process.env.WORKOS_CLIENT_ID &&
+      process.env.WORKOS_API_KEY &&
+      process.env.WORKOS_COOKIE_PASSWORD &&
+      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI &&
+      !isDemoDataEnabled(),
+  );
+
   return (
     <html
       lang="en"
@@ -23,7 +32,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <body>
-        <Providers>{children}</Providers>
+        <Providers authEnabled={authEnabled}>{children}</Providers>
       </body>
     </html>
   );

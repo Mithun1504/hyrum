@@ -13,7 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-const timestamps = {
+export const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -34,6 +34,12 @@ export const jobStatus = pgEnum("job_status", [
   "failed",
   "dead",
 ]);
+export const behaviorKind = pgEnum("behavior_kind", ["shape", "ordering", "error", "status"]);
+export const evidenceTier = pgEnum("evidence_tier", ["T1", "T2", "T3"]);
+export const claimState = pgEnum("claim_state", ["active", "stale", "dismissed"]);
+export const assertionStatus = pgEnum("assertion_status", ["active", "expired", "resolved"]);
+export const replayOutcome = pgEnum("replay_outcome", ["pass", "warn", "block"]);
+export const assertionReplayOutcome = pgEnum("assertion_replay_outcome", ["pass", "fail"]);
 
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -83,13 +89,56 @@ export const agents = pgTable(
     tokenPrefix: text("token_prefix").notNull(),
     tokenHash: text("token_hash").notNull(),
     scopes: text("scopes").array().notNull().default(sql`ARRAY[]::text[]`),
+    signingPublicKey: text("signing_public_key"),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
+    uniqueIndex("agents_token_prefix_unique").on(table.tokenPrefix),
     uniqueIndex("agents_org_prefix_unique").on(table.organizationId, table.tokenPrefix),
     index("agents_org_idx").on(table.organizationId),
+  ],
+);
+
+export const githubRepositories = pgTable(
+  "github_repositories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    installationId: bigint("installation_id", { mode: "number" }).notNull(),
+    owner: text("owner").notNull(),
+    name: text("name").notNull(),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("github_repositories_org_installation_repo_unique").on(
+      table.organizationId,
+      table.installationId,
+      table.owner,
+      table.name,
+    ),
+    index("github_repositories_org_active_idx").on(table.organizationId, table.active),
+  ],
+);
+
+export const slackChannels = pgTable(
+  "slack_channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    channelId: text("channel_id").notNull(),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("slack_channels_org_channel_unique").on(table.organizationId, table.channelId),
+    index("slack_channels_org_active_idx").on(table.organizationId, table.active),
   ],
 );
 
@@ -97,9 +146,9 @@ export const jobs = pgTable(
   "jobs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id").references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     payload: jsonb("payload").notNull().default({}),
     status: jobStatus("status").notNull().default("pending"),
@@ -122,16 +171,36 @@ export const outboxEvents = pgTable(
   "outbox_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: uuid("organization_id").references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
     topic: text("topic").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
     payload: jsonb("payload").notNull(),
     attempts: integer("attempts").notNull().default(0),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [index("outbox_unpublished_idx").on(table.publishedAt, table.createdAt)],
+  (table) => [
+    uniqueIndex("outbox_org_idempotency_unique").on(table.organizationId, table.idempotencyKey),
+    index("outbox_unpublished_idx").on(table.publishedAt, table.createdAt),
+    index("outbox_org_topic_idx").on(table.organizationId, table.topic),
+  ],
+);
+
+export const progressEvents = pgTable(
+  "progress_events",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAsIdentity(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    resourceId: text("resource_id"),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("progress_events_org_id_idx").on(table.organizationId, table.id)],
 );
 
 export const auditEvents = pgTable(

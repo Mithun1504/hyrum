@@ -1,0 +1,62 @@
+{
+  "version": "1.0.0",
+  "organization_id": "00000000-0000-4000-8000-000000000001",
+  "base_url": "http://127.0.0.1:4100",
+  "candidate_url": "http://127.0.0.1:4200",
+  "base_image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "candidate_image_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "fixture_digest": "sha256:a19b4f02b1623a4c02d904c44b900fbb56f48fb47dd5b71e0e5b2c08c873d0b3",
+  "policy_id": "00000000-0000-4000-8000-000000000091",
+  "policy_version": 1,
+  "allowed_hosts": ["127.0.0.1"],
+  "runs": 3,
+  "timeout_ms": 5000,
+  "signing_key_id": "demo-ephemeral",
+  "corpus": [
+    {
+      "case_id": "pagination-cursor",
+      "organization_id": "00000000-0000-4000-8000-000000000001",
+      "session_id": "consumer-a-demo",
+      "consumer_id": "consumer-a-scripted",
+      "sequence": 1,
+      "request": { "method": "GET", "path": "/products" },
+      "claims": [
+        {
+          "claim_id": "00000000-0000-4000-8000-000000000101",
+          "behavior_kind": "shape",
+          "behavior_path": "$.next_cursor"
+        }
+      ]
+    },
+    {
+      "case_id": "discount-error-template",
+      "organization_id": "00000000-0000-4000-8000-000000000001",
+      "session_id": "consumer-b-demo",
+      "consumer_id": "consumer-b-scripted",
+      "sequence": 1,
+      "request": { "method": "GET", "path": "/discounts/EXPIRED" },
+      "claims": [
+        {
+          "claim_id": "00000000-0000-4000-8000-000000000102",
+          "behavior_kind": "error",
+          "behavior_path": "$error"
+        }
+      ]
+    },
+    {
+      "case_id": "legacy-id-exposure",
+      "organization_id": "00000000-0000-4000-8000-000000000001",
+      "session_id": "consumer-c-demo",
+      "consumer_id": "consumer-c-scripted",
+      "sequence": 1,
+      "request": { "method": "GET", "path": "/customers/cust_01" },
+      "claims": [
+        {
+          "claim_id": "00000000-0000-4000-8000-000000000103",
+          "behavior_kind": "shape",
+          "behavior_path": "$.legacy_id"
+        }
+      ]
+    }
+  ]
+}

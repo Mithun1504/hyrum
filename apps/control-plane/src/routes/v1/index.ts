@@ -1,5 +1,14 @@
+import { sessionResponseSchema } from "@hyrum/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { assertionRoutes } from "./assertions";
+import { captureRoutes } from "./capture";
+import { ledgerRoutes } from "./ledger";
+import { policyRoutes } from "./policies";
+import { progressRoutes } from "./progress";
+import { replayRoutes } from "./replay";
+import { specDraftRoutes } from "./spec-drafts";
+import { specRoutes } from "./specs";
 
 export const v1Routes: FastifyPluginAsyncZod = async (app) => {
   app.get(
@@ -23,7 +32,7 @@ export const v1Routes: FastifyPluginAsyncZod = async (app) => {
         tags: ["auth"],
         security: [{ bearerAuth: [] }],
         response: {
-          200: z.object({ actorId: z.string(), organizationId: z.string(), role: z.string() }),
+          200: sessionResponseSchema,
         },
       },
     },
@@ -32,4 +41,13 @@ export const v1Routes: FastifyPluginAsyncZod = async (app) => {
       return request.authContext;
     },
   );
+
+  await app.register(captureRoutes);
+  await app.register(ledgerRoutes);
+  await app.register(assertionRoutes);
+  await app.register(policyRoutes);
+  await app.register(replayRoutes);
+  await app.register(specRoutes);
+  await app.register(specDraftRoutes);
+  await app.register(progressRoutes);
 };

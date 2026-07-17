@@ -1,21 +1,33 @@
-import { DatabaseZap } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
+import { withAuth } from "@workos-inc/authkit-nextjs";
+import { normalizeView, WorkspaceShell } from "@/components/workspace/workspace-shell";
+import { isDemoDataEnabled } from "@/services/control-plane";
+import { getWorkspaceSnapshot, parseFilters } from "@/services/workspace-data";
 
-export default function WorkspacePage() {
-  return (
-    <section className="space-y-section">
-      <div>
-        <p className="text-sm font-medium text-primary">Workspace</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Accidental contract ledger</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The authenticated shell is ready for feature development.
-        </p>
-      </div>
-      <EmptyState
-        icon={DatabaseZap}
-        title="No ledger data yet"
-        description="Capture, dependency inference, and replay are business features and are intentionally absent from this scaffold."
-      />
-    </section>
-  );
+export const dynamic = "force-dynamic";
+
+type WorkspacePageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function WorkspacePage({ searchParams }: WorkspacePageProps) {
+  const params = await searchParams;
+  const urlSearchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") urlSearchParams.set(key, value);
+  }
+
+  const demoMode = isDemoDataEnabled();
+  const auth = demoMode ? null : await withAuth({ ensureSignedIn: true });
+  const snapshot = await getWorkspaceSnapshot(parseFilters(urlSearchParams), {
+    accessToken: auth?.accessToken,
+    demoMode,
+  });
+  const view = normalizeView(typeof params.view === "string" ? params.view : undefined);
+
+  const actorLabel = auth?.user
+    ? [auth.user.firstName, auth.user.lastName].filter(Boolean).join(" ") || auth.user.email
+    : "Demo user";
+
+  return <WorkspaceShell snapshot={snapshot} view={view} actorLabel={actorLabel} />;
 }

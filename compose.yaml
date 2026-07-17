@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: hyrum
       POSTGRES_PASSWORD: hyrum
     ports:
-      - "5432:5432"
+      - "${HYRUM_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -24,8 +24,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${HYRUM_MINIO_API_PORT:-9000}:9000"
+      - "${HYRUM_MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
     healthcheck:
@@ -53,6 +53,42 @@ services:
     volumes:
       - ./infra/wiremock:/home/wiremock
     command: ["--global-response-templating", "--verbose"]
+
+  demo-api-base:
+    build:
+      context: .
+      dockerfile: infra/docker/demo-api.Dockerfile
+      args:
+        DEMO_VARIANT: base
+    environment:
+      DEMO_VARIANT: base
+      HOST: 0.0.0.0
+      PORT: 4100
+    ports:
+      - "4100:4100"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:4100/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  demo-api-candidate:
+    build:
+      context: .
+      dockerfile: infra/docker/demo-api.Dockerfile
+      args:
+        DEMO_VARIANT: candidate
+    environment:
+      DEMO_VARIANT: candidate
+      HOST: 0.0.0.0
+      PORT: 4100
+    ports:
+      - "4200:4100"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:4100/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
 
 volumes:
   postgres-data:

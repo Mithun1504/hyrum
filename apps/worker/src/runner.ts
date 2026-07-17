@@ -1,7 +1,15 @@
-import { type ClaimedJob, claimJobs, completeJob, type Database, failJob } from "@hyrum/db";
+import {
+  type ClaimedJob,
+  claimJobs,
+  completeJob,
+  type Database,
+  failJob,
+  type TenantDb,
+  withTenant,
+} from "@hyrum/db";
 import type { Logger } from "@hyrum/logger";
 
-export type JobHandler = (job: ClaimedJob) => Promise<void>;
+export type JobHandler = (job: ClaimedJob, db: TenantDb) => Promise<void>;
 
 export interface WorkerOptions {
   db: Database;
@@ -21,12 +29,12 @@ export async function runWorker(options: WorkerOptions, signal: AbortSignal): Pr
       const handler = handlers.get(job.type);
       try {
         if (!handler) throw new Error(`No handler registered for job type: ${job.type}`);
-        await handler(job);
-        await completeJob(options.db, job.id);
+        await withTenant(options.db, job.organizationId, (tenantDb) => handler(job, tenantDb));
+        await completeJob(options.db, job.id, options.workerId);
       } catch (error) {
         const normalized = error instanceof Error ? error : new Error("Unknown job failure");
         options.logger.error({ err: normalized, jobId: job.id, jobType: job.type }, "job failed");
-        await failJob(options.db, job, normalized);
+        await failJob(options.db, job, options.workerId, normalized);
       }
     }
 
