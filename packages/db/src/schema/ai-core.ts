@@ -64,7 +64,7 @@ export const llmRuns = pgTable(
     outputDigest: text("output_digest"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
-    estimatedCostMicrounits: bigint("estimated_cost_microunits", { mode: "number" }),
+    estimatedCostMicrounits: bigint("estimated_cost_microunits", { mode: "bigint" }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     failureCode: text("failure_code"),

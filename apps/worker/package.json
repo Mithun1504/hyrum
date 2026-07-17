@@ -13,9 +13,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hyrum/contracts": "workspace:*",
     "@hyrum/db": "workspace:*",
     "@hyrum/env": "workspace:*",
-    "@hyrum/logger": "workspace:*"
+    "@hyrum/integrations": "workspace:*",
+    "@hyrum/logger": "workspace:*",
+    "@hyrum/openai": "workspace:*",
+    "@hyrum/storage": "workspace:*",
+    "@hyrum/specs": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.8",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

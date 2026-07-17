@@ -123,11 +123,20 @@ describe("database schema", () => {
       new URL("../migrations/0001_security.sql", import.meta.url),
       "utf8",
     );
+    const hardening = readFileSync(
+      new URL("../migrations/0003_policy_hardening.sql", import.meta.url),
+      "utf8",
+    );
 
     expect(baseline).toContain('PARTITION BY RANGE ("bucket_start")');
     expect(baseline.match(/PARTITION BY RANGE \("occurred_at"\)/g)).toHaveLength(2);
     expect(security).toContain("ALTER TABLE organizations FORCE ROW LEVEL SECURITY");
     expect(security).toContain("CREATE CONSTRAINT TRIGGER gate_decisions_block_eligibility");
     expect(security).toContain("CREATE CONSTRAINT TRIGGER dependency_claims_t1_evidence");
+    expect(hardening).toContain("audit_events_default");
+    expect(hardening).toContain("behavior_observations_default");
+    expect(hardening).toContain("r.completeness = 'complete'");
+    expect(hardening).toContain("rd.stability = 'stable'");
+    expect(hardening).toContain("CREATE TRIGGER gate_impacts_exact_exception");
   });
 });

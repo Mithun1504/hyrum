@@ -25,7 +25,7 @@ export const storedObjects = pgTable(
     objectKey: text("object_key").notNull(),
     contentType: text("content_type").notNull(),
     contentEncoding: text("content_encoding"),
-    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    byteSize: bigint("byte_size", { mode: "bigint" }).notNull(),
     sha256Digest: text("sha256_digest").notNull(),
     encryptionKeyVersionId: uuid("encryption_key_version_id"),
     scanStatus: objectScanStatus("scan_status").notNull().default("pending"),

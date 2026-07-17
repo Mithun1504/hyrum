@@ -159,9 +159,6 @@ export const gateImpacts = pgTable(
     uniqueIndex("gate_impacts_assertion_target_uq")
       .on(table.gateDecisionId, table.replayDeltaId, table.consumerId, table.assertionId)
       .where(sql`${table.assertionId} is not null`),
-    uniqueIndex("gate_impacts_exception_single_use_uq")
-      .on(table.gateExceptionId)
-      .where(sql`${table.gateExceptionId} is not null`),
     foreignKey({
       name: "gate_impacts_decision_fk",
       columns: [table.organizationId, table.gateDecisionId],

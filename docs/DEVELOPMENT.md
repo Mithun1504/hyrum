@@ -2,9 +2,9 @@
 
 ## Prerequisites
 
-- Node.js 22 LTS (`.nvmrc` and `.tool-versions` are provided)
+- Node.js 24 LTS (`.nvmrc` and `.tool-versions` are provided)
 - Corepack and pnpm 10.33.0
-- Go 1.24 or newer
+- Go 1.26.x
 - Docker Desktop or Docker Engine with Compose v2
 - A WorkOS AuthKit application for authenticated pages
 - Optional OpenAI, GitHub App, Slack App, R2, Sentry, and OTLP credentials
@@ -52,9 +52,94 @@ pnpm db:migrate
 pnpm db:studio
 ```
 
-The worker uses a durable Postgres table and `FOR UPDATE SKIP LOCKED`. Job handlers are deliberately
-empty in the scaffold. New handlers must be idempotent, tenant-scoped, bounded, and registered by
-explicit job type. Redis is not part of the approved architecture.
+The worker uses a durable Postgres queue with leased, fenced claims. Implemented handlers cover
+capture processing, corpus construction, assertion lifecycle, differential replay follow-up, GitHub
+Checks, notifications, Slack delivery, schema-validated advisory generation, privacy exports, and
+two-phase organization deletion. New handlers must be idempotent, tenant-scoped unless explicitly
+platform-scoped, bounded, and registered by explicit job type. Redis is not part of the approved
+architecture.
+
+## Reproducible hackathon demo
+
+The demo is an eight-endpoint e-commerce API with base and candidate variants. Consumers A, B, and C
+are explicitly scripted; the capture, redaction, extraction, ledger, replay, and gate path is real.
+
+```bash
+docker compose --profile demo up -d demo-base demo-candidate
+pnpm demo:capture
+```
+
+`pnpm demo:capture` sends 50,000 requests by default and writes the raw local capture envelope under
+the ignored `.hyrum-demo` directory. Set `DEMO_REQUESTS=100` for a smoke run or `DEMO_BASE_URL` to
+target another base instance. Feed that file to `hyrum-agent` with sampling set to `1` for a fully
+deterministic demo fixture. Consumer A echoes `next_cursor` (T1), consumer B retries on one controlled
+422 template (T2), and consumer C only observes `legacy_id` (T3).
+
+## Release evaluation
+
+The committed labeled corpus contains planted T1/T2/T3 cases and hard negatives. Run it with:
+
+```bash
+pnpm eval:release
+```
+
+The command exits non-zero when the T1 precision gate fails and always reports precision and recall
+together. When `DATABASE_URL` is present, it also records the immutable global dataset, evaluation
+run, and all per-tier confusion metrics using the release/evaluation database role.
+
+## GitHub pull-request replay
+
+Install the GitHub App, connect the repository to a Hyrum service, and set
+`GITHUB_ACTIONS_OIDC_AUDIENCE` to the same value passed to the action. The workflow needs no stored
+Hyrum credential: GitHub OIDC is exchanged for a 15-minute, one-use runner bundle.
+
+```yaml
+permissions:
+  contents: read
+  id-token: write
+
+steps:
+  - uses: actions/checkout@v4
+  - uses: ./.github/actions/hyrum-replay
+    with:
+      control-plane-url: https://hyrum.example.com
+      service-slug: payments
+      corpus-id: ${{ vars.HYRUM_CORPUS_ID }}
+      base-image: sha256:<immutable-base-digest>
+      candidate-image: sha256:<immutable-candidate-digest>
+      replay-image: ghcr.io/example/hyrum-go-tools@sha256:<pinned-digest>
+```
+
+The job must run on Linux with Docker, OpenSSL, curl, and jq. Pin all third-party actions and the Hyrum
+runner image by commit or digest in production. Pull-request events from unconnected repositories,
+fork mismatches, expired corpora, and non-PR OIDC subjects are rejected.
+
+## Advisory drafts
+
+`OPENAI_API_KEY` enables cited replay explanations, additive OpenAPI patch drafts, and customer notice
+drafts. Model output is persisted as a generated artifact, marked AI-assisted, and requires explicit
+human acceptance. Invalid citations, destructive JSON Patch operations, and notices containing
+untrusted links are rejected; an OpenAI outage produces an abstaining deterministic fallback and does
+not affect extraction, replay, or gate decisions.
+
+## Privacy workflows
+
+Workspace owners can request an allowlisted JSON export or permanent deletion under
+`/app/settings/privacy`; both actions require recent authentication and exact confirmation text.
+Exports exclude traffic bodies, credentials, secrets, HMAC inputs, prompts, and signed URLs and expire
+after seven days. Deletion first records a manifest and moves the workspace to `deleting`; the
+platform maintenance job deletes every tenant object before cascading relational records. Only a
+secret-free digest and aggregate counts remain in the platform audit trail.
+
+## Internal support access
+
+Internal routes are absent unless `INTERNAL_OPERATIONS_ENABLED=true`; enable them only on a private
+operations deployment or network path. Platform operators are provisioned directly with explicit
+capabilities. One operator requests a 5–60 minute read-only grant and a different operator must
+approve it. The requesting operator then sends the grant UUID in `X-Hyrum-Support-Grant` with their
+normal WorkOS bearer token. Expired, revoked, unapproved, self-approved, write-scoped, or
+cross-operator grants are denied. Receipt access is recorded in the tenant audit trail as a platform
+operator action citing the support grant.
 
 ## UI and design system
 

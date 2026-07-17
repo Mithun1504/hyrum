@@ -108,7 +108,7 @@ export const corpusItems = pgTable(
     behaviorDefinitionId: uuid("behavior_definition_id"),
     assertionId: uuid("assertion_id"),
     coverageClass: coverageClass("coverage_class").notNull(),
-    objectOffset: bigint("object_offset", { mode: "number" }).notNull(),
+    objectOffset: bigint("object_offset", { mode: "bigint" }).notNull(),
     requestDigest: text("request_digest").notNull(),
     method: text("method").notNull(),
     normalizedPath: text("normalized_path").notNull(),
@@ -321,7 +321,7 @@ export const ciRunnerSessions = pgTable(
   (table) => [
     uniqueIndex("ci_runner_sessions_org_id_uq").on(table.organizationId, table.id),
     uniqueIndex("ci_runner_sessions_token_prefix_uq").on(table.tokenPrefix),
-    uniqueIndex("ci_runner_sessions_active_run_uq")
+    index("ci_runner_sessions_active_run_idx")
       .on(table.replayRunId)
       .where(sql`${table.consumedAt} is null and ${table.revokedAt} is null`),
     foreignKey({

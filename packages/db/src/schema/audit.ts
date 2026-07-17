@@ -24,7 +24,7 @@ export const auditEvents = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade", onUpdate: "cascade" }),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    id: bigint("id", { mode: "number" }).notNull().generatedAlwaysAsIdentity(),
+    id: bigint("id", { mode: "bigint" }).notNull().generatedAlwaysAsIdentity(),
     actorType: actorType("actor_type").notNull(),
     actorId: text("actor_id"),
     supportAccessGrantId: uuid("support_access_grant_id"),
@@ -112,7 +112,7 @@ export const platformAuditEvents = pgTable(
   "platform_audit_events",
   {
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    id: bigint("id", { mode: "number" }).notNull().generatedAlwaysAsIdentity(),
+    id: bigint("id", { mode: "bigint" }).notNull().generatedAlwaysAsIdentity(),
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id"),
     action: text("action").notNull(),

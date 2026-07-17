@@ -6,9 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const foundations = [
-  { icon: Braces, label: "Deterministic extraction" },
-  { icon: GitPullRequestArrow, label: "Differential replay" },
-  { icon: ShieldCheck, label: "Evidence-backed gates" },
+  {
+    icon: Braces,
+    label: "Deterministic extraction",
+    description:
+      "Shared capture and replay extractors turn redacted sequences into verifiable behavior facts.",
+  },
+  {
+    icon: GitPullRequestArrow,
+    label: "Differential replay",
+    description:
+      "Isolated base and candidate builds prove semantic changes before a release reaches customers.",
+  },
+  {
+    icon: ShieldCheck,
+    label: "Evidence-backed gates",
+    description:
+      "T1 echo evidence can block, T2 warns, and T3 stays informational—with receipts behind every claim.",
+  },
 ] as const;
 
 export default function HomePage() {
@@ -45,15 +60,13 @@ export default function HomePage() {
       </section>
 
       <section aria-label="Platform foundations" className="grid gap-4 pb-8 md:grid-cols-3">
-        {foundations.map(({ icon: Icon, label }) => (
+        {foundations.map(({ icon: Icon, label, description }) => (
           <Card key={label}>
             <CardHeader>
               <Icon className="size-5 text-primary" aria-hidden="true" />
               <CardTitle className="text-base">{label}</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Foundation configured; product workflows are intentionally not implemented yet.
-            </CardContent>
+            <CardContent className="text-sm text-muted-foreground">{description}</CardContent>
           </Card>
         ))}
       </section>

@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "name": "hyrum-release-claims",
+  "version": 1,
+  "extractorVersion": "1.0.0",
+  "ruleVersion": "claim-inference-v1",
+  "thresholds": { "t1Precision": 0.95 },
+  "examples": [
+    {
+      "id": "cursor-echo-1",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 1, "retryCovariation": null }
+    },
+    {
+      "id": "cursor-echo-2",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 2, "retryCovariation": null }
+    },
+    {
+      "id": "header-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 1, "retryCovariation": null }
+    },
+    {
+      "id": "body-id-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 3, "retryCovariation": null }
+    },
+    {
+      "id": "nested-token-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 1, "retryCovariation": null }
+    },
+    {
+      "id": "ordering-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 2, "retryCovariation": null }
+    },
+    {
+      "id": "error-code-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 1, "retryCovariation": null }
+    },
+    {
+      "id": "opaque-page-key-echo",
+      "expectedTier": "t1",
+      "evidence": { "completeSession": true, "echoPairs": 1, "retryCovariation": null }
+    },
+
+    {
+      "id": "error-template-retry-1",
+      "expectedTier": "t2",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 20,
+          "exposedRetries": 18,
+          "controlTotal": 20,
+          "controlRetries": 2,
+          "statusControlled": true
+        }
+      }
+    },
+    {
+      "id": "error-template-retry-2",
+      "expectedTier": "t2",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 30,
+          "exposedRetries": 25,
+          "controlTotal": 30,
+          "controlRetries": 5,
+          "statusControlled": true
+        }
+      }
+    },
+    {
+      "id": "error-template-retry-3",
+      "expectedTier": "t2",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 40,
+          "exposedRetries": 32,
+          "controlTotal": 40,
+          "controlRetries": 8,
+          "statusControlled": true
+        }
+      }
+    },
+    {
+      "id": "error-template-retry-4",
+      "expectedTier": "t2",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 25,
+          "exposedRetries": 20,
+          "controlTotal": 25,
+          "controlRetries": 4,
+          "statusControlled": true
+        }
+      }
+    },
+
+    {
+      "id": "legacy-id-exposure",
+      "expectedTier": "t3",
+      "evidence": { "completeSession": true, "echoPairs": 0, "retryCovariation": null }
+    },
+    {
+      "id": "incomplete-session-echo",
+      "expectedTier": "t3",
+      "evidence": { "completeSession": false, "echoPairs": 1, "retryCovariation": null }
+    },
+    {
+      "id": "underpowered-retry-pattern",
+      "expectedTier": "t3",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 4,
+          "exposedRetries": 4,
+          "controlTotal": 20,
+          "controlRetries": 1,
+          "statusControlled": true
+        }
+      }
+    },
+    {
+      "id": "status-confounded-retry",
+      "expectedTier": "t3",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 20,
+          "exposedRetries": 18,
+          "controlTotal": 20,
+          "controlRetries": 2,
+          "statusControlled": false
+        }
+      }
+    },
+    {
+      "id": "weak-retry-covariation",
+      "expectedTier": "t3",
+      "evidence": {
+        "completeSession": true,
+        "echoPairs": 0,
+        "retryCovariation": {
+          "exposedTotal": 50,
+          "exposedRetries": 22,
+          "controlTotal": 50,
+          "controlRetries": 18,
+          "statusControlled": true
+        }
+      }
+    },
+    {
+      "id": "constant-shape-exposure",
+      "expectedTier": "t3",
+      "evidence": { "completeSession": true, "echoPairs": 0, "retryCovariation": null }
+    },
+    {
+      "id": "unrelated-follow-up",
+      "expectedTier": "t3",
+      "evidence": { "completeSession": true, "echoPairs": 0, "retryCovariation": null }
+    },
+    {
+      "id": "truncated-capture",
+      "expectedTier": "t3",
+      "evidence": { "completeSession": false, "echoPairs": 0, "retryCovariation": null }
+    }
+  ]
+}

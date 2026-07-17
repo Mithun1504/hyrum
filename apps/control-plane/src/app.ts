@@ -8,6 +8,7 @@ import { problemDetailsSchema } from "@hyrum/contracts";
 import type { RuntimeEnv } from "@hyrum/env";
 import { createLogger } from "@hyrum/logger";
 import Fastify from "fastify";
+import rawBody from "fastify-raw-body";
 import {
   jsonSchemaTransform,
   serializerCompiler,
@@ -16,8 +17,14 @@ import {
 import { ZodError } from "zod";
 import { authPlugin } from "./plugins/auth";
 import { databasePlugin } from "./plugins/database";
+import { machineAuthPlugin } from "./plugins/machine-auth";
+import { objectStoragePlugin } from "./plugins/object-storage";
+import { githubWebhookRoutes } from "./routes/github-webhooks";
 import { healthRoutes } from "./routes/health";
+import { internalOperationRoutes } from "./routes/internal-operations";
+import { slackWebhookRoutes } from "./routes/slack-webhooks";
 import { v1Routes } from "./routes/v1/index";
+import { workosWebhookRoutes } from "./routes/workos-webhooks";
 
 export interface BuildAppOptions {
   env: RuntimeEnv;
@@ -31,48 +38,10 @@ export async function buildApp({ env, includeDatabase = true }: BuildAppOptions)
     trustProxy: true,
     bodyLimit: 1_048_576,
   });
+  app.decorate("runtimeEnv", env);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
-  await app.register(sensible);
-  await app.register(cors, { origin: env.WEB_URL, credentials: true });
-  await app.register(helmet, { contentSecurityPolicy: false });
-  await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
-  await app.register(swagger, {
-    openapi: {
-      info: { title: "Hyrum Control Plane API", version: "0.1.0" },
-      components: {
-        securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
-      },
-    },
-    transform: jsonSchemaTransform,
-  });
-  await app.register(swaggerUi, { routePrefix: "/docs", uiConfig: { docExpansion: "list" } });
-
-  if (includeDatabase) await app.register(databasePlugin, { env });
-  await app.register(authPlugin, {
-    jwksUrl: process.env.WORKOS_JWKS_URL,
-    issuer: process.env.WORKOS_ISSUER,
-    audience: process.env.WORKOS_AUDIENCE,
-  });
-  await app.register(healthRoutes);
-  await app.register(v1Routes, { prefix: "/v1" });
-
-  app.setNotFoundHandler((request, reply) => {
-    reply
-      .code(404)
-      .type("application/problem+json")
-      .send(
-        problemDetailsSchema.parse({
-          type: "about:blank",
-          title: "Not Found",
-          status: 404,
-          instance: request.url,
-          requestId: request.id,
-        }),
-      );
-  });
-
   app.setErrorHandler((error, request, reply) => {
     const normalizedError = error instanceof Error ? error : new Error("Unknown request failure");
     const candidateStatus =
@@ -98,6 +67,54 @@ export async function buildApp({ env, includeDatabase = true }: BuildAppOptions)
         instance: request.url,
         requestId: request.id,
       });
+  });
+  await app.register(sensible);
+  await app.register(cors, { origin: env.WEB_URL, credentials: true });
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(rateLimit, { max: 200, timeWindow: "1 minute" });
+  await app.register(swagger, {
+    openapi: {
+      info: { title: "Hyrum Control Plane API", version: "0.1.0" },
+      components: {
+        securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
+      },
+    },
+    transform: jsonSchemaTransform,
+  });
+  await app.register(swaggerUi, { routePrefix: "/docs", uiConfig: { docExpansion: "list" } });
+  await app.register(rawBody, { global: false, encoding: "utf8", runFirst: true });
+
+  if (includeDatabase) await app.register(databasePlugin, { env });
+  await app.register(objectStoragePlugin, { env });
+  await app.register(authPlugin, {
+    workosApiKey: env.WORKOS_API_KEY,
+    jwksUrl: env.WORKOS_JWKS_URL,
+    issuer: env.WORKOS_ISSUER,
+    audience: env.WORKOS_AUDIENCE,
+  });
+  await app.register(machineAuthPlugin, { tokenPepper: env.MACHINE_TOKEN_PEPPER });
+  await app.register(workosWebhookRoutes, { webhookSecret: env.WORKOS_WEBHOOK_SECRET });
+  await app.register(githubWebhookRoutes, { webhookSecret: env.GITHUB_WEBHOOK_SECRET });
+  await app.register(slackWebhookRoutes, { signingSecret: env.SLACK_SIGNING_SECRET });
+  await app.register(healthRoutes);
+  if (env.INTERNAL_OPERATIONS_ENABLED) {
+    await app.register(internalOperationRoutes, { prefix: "/internal" });
+  }
+  await app.register(v1Routes, { prefix: "/v1" });
+
+  app.setNotFoundHandler((request, reply) => {
+    reply
+      .code(404)
+      .type("application/problem+json")
+      .send(
+        problemDetailsSchema.parse({
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          instance: request.url,
+          requestId: request.id,
+        }),
+      );
   });
 
   return app;

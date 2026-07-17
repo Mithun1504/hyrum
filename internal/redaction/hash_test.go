@@ -18,6 +18,9 @@ func TestStructuralHash(t *testing.T) {
 	if first == "sensitive" {
 		t.Fatal("hash must not preserve the source value")
 	}
+	if len(first) != len("hmac-sha256:")+64 {
+		t.Fatalf("unexpected token format: %q", first)
+	}
 }
 
 func TestStructuralHashRejectsShortKey(t *testing.T) {

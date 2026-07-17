@@ -17,5 +17,5 @@ func StructuralHash(key []byte, value []byte) (string, error) {
 	}
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write(value)
-	return hex.EncodeToString(mac.Sum(nil)), nil
+	return "hmac-sha256:" + hex.EncodeToString(mac.Sum(nil)), nil
 }

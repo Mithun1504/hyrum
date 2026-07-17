@@ -1,29 +1,26 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { redirect } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { getWorkspace } from "@/services/workspace";
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const { user, organizationId } = await withAuth({ ensureSignedIn: true });
+  const { organizationId } = await withAuth({ ensureSignedIn: true });
+  if (!organizationId) redirect("/app/select-organization");
+  const { user, session, organization, services, notifications } = await getWorkspace();
 
   return (
-    <div className="min-h-dvh bg-muted/20">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-page">
-          <Link href="/app" aria-label="Hyrum workspace">
-            <BrandMark />
-          </Link>
-          <Separator orientation="vertical" className="h-5" />
-          <Badge variant="outline">Foundation</Badge>
-          <div className="ml-auto text-sm text-muted-foreground">
-            {user.email} · {organizationId ?? "No organization selected"}
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-7xl p-page">{children}</main>
-    </div>
+    <AppShell
+      organizationName={organization.name}
+      organizationStatus={organization.status}
+      role={session.role}
+      permissions={session.permissions}
+      userEmail={user.email}
+      services={services}
+      unreadNotificationCount={notifications.unreadCount}
+    >
+      {children}
+    </AppShell>
   );
 }

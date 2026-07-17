@@ -38,7 +38,7 @@ export const githubCheckRuns = pgTable(
     pullRequestId: uuid("pull_request_id").notNull(),
     replayRunId: uuid("replay_run_id").notNull(),
     gateDecisionId: uuid("gate_decision_id").notNull(),
-    githubCheckRunId: bigint("github_check_run_id", { mode: "number" }),
+    githubCheckRunId: bigint("github_check_run_id", { mode: "bigint" }),
     externalId: text("external_id").notNull(),
     status: text("status").notNull(),
     conclusion: text("conclusion"),
@@ -324,6 +324,8 @@ export const notificationDeliveries = pgTable(
       columns: [table.organizationId, table.notificationRouteId],
       foreignColumns: [notificationRoutes.organizationId, notificationRoutes.id],
     }).onDelete("cascade"),
-    index("notification_deliveries_pending_idx").on(table.status, table.nextAttemptAt),
+    index("notification_deliveries_pending_idx")
+      .on(table.nextAttemptAt)
+      .where(sql`${table.status} in ('queued', 'failed')`),
   ],
 );

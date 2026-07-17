@@ -54,6 +54,36 @@ services:
       - ./infra/wiremock:/home/wiremock
     command: ["--global-response-templating", "--verbose"]
 
+  demo-base:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: infra/docker/demo.Dockerfile
+    environment:
+      DEMO_VARIANT: base
+      PORT: 4100
+    ports: ["4100:4100"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4100/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  demo-candidate:
+    profiles: ["demo"]
+    build:
+      context: .
+      dockerfile: infra/docker/demo.Dockerfile
+    environment:
+      DEMO_VARIANT: candidate
+      PORT: 4100
+    ports: ["4101:4100"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4100/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
 volumes:
   postgres-data:
   minio-data:

@@ -26,7 +26,7 @@ export const githubInstallations = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    githubInstallationId: bigint("github_installation_id", { mode: "number" }).notNull(),
+    githubInstallationId: bigint("github_installation_id", { mode: "bigint" }).notNull(),
     accountLogin: text("account_login").notNull(),
     accountType: text("account_type").notNull(),
     status: integrationStatus("status").notNull().default("pending"),
@@ -56,7 +56,7 @@ export const githubRepositories = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade", onUpdate: "cascade" }),
     githubInstallationId: uuid("github_installation_id").notNull(),
-    githubRepositoryId: bigint("github_repository_id", { mode: "number" }).notNull(),
+    githubRepositoryId: bigint("github_repository_id", { mode: "bigint" }).notNull(),
     ownerLogin: text("owner_login").notNull(),
     name: text("name").notNull(),
     defaultBranch: text("default_branch").notNull(),
@@ -133,7 +133,7 @@ export const pullRequests = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade", onUpdate: "cascade" }),
     githubRepositoryId: uuid("github_repository_id").notNull(),
-    githubPullRequestId: bigint("github_pull_request_id", { mode: "number" }).notNull(),
+    githubPullRequestId: bigint("github_pull_request_id", { mode: "bigint" }).notNull(),
     number: integer("number").notNull(),
     headSha: text("head_sha").notNull(),
     baseSha: text("base_sha").notNull(),

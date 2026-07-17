@@ -68,6 +68,10 @@ export const behaviorDefinitions = pgTable(
       foreignColumns: [apiOperations.organizationId, apiOperations.id],
     }).onDelete("cascade"),
     index("behavior_definitions_operation_kind_idx").on(table.apiOperationId, table.kind),
+    index("behavior_definitions_label_trgm_idx").using(
+      "gin",
+      sql`${table.defaultLabel} gin_trgm_ops`,
+    ),
   ],
 );
 
@@ -234,13 +238,13 @@ export const behaviorObservations = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade", onUpdate: "cascade" }),
     bucketStart: timestamp("bucket_start", { withTimezone: true }).notNull(),
-    id: bigint("id", { mode: "number" }).notNull().generatedAlwaysAsIdentity(),
+    id: bigint("id", { mode: "bigint" }).notNull().generatedAlwaysAsIdentity(),
     environmentId: uuid("environment_id").notNull(),
     apiOperationId: uuid("api_operation_id").notNull(),
     consumerId: uuid("consumer_id").notNull(),
     behaviorDefinitionId: uuid("behavior_definition_id").notNull(),
-    observationCount: bigint("observation_count", { mode: "number" }).notNull(),
-    sessionCount: bigint("session_count", { mode: "number" }).notNull(),
+    observationCount: bigint("observation_count", { mode: "bigint" }).notNull(),
+    sessionCount: bigint("session_count", { mode: "bigint" }).notNull(),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
     sampleWeight: numeric("sample_weight").notNull(),

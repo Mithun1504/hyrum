@@ -17,3 +17,4 @@ test-results/
 .vscode/
 tmp/
 data/
+.hyrum-demo/

@@ -42,6 +42,7 @@ export const apiServices = pgTable(
       foreignColumns: [memberships.organizationId, memberships.id],
     }).onDelete("restrict"),
     index("api_services_org_status_idx").on(table.organizationId, table.status),
+    index("api_services_name_trgm_idx").using("gin", sql`${table.name} gin_trgm_ops`),
   ],
 );
 

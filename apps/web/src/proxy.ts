@@ -19,6 +19,7 @@ export default workosConfigured
   : function unconfiguredAuthProxy(request: NextRequest) {
       const protectedPath =
         request.nextUrl.pathname.startsWith("/app") ||
+        request.nextUrl.pathname.startsWith("/internal") ||
         request.nextUrl.pathname.startsWith("/sign-in") ||
         request.nextUrl.pathname.startsWith("/auth/callback");
       if (protectedPath) {

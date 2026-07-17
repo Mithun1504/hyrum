@@ -1,0 +1,103 @@
+name: Hyrum differential replay
+description: Exchange GitHub OIDC for a one-use runner bundle and publish an evidence-backed compatibility gate.
+
+inputs:
+  control-plane-url:
+    description: Hyrum control-plane origin
+    required: true
+  service-slug:
+    description: Connected Hyrum service slug
+    required: true
+  corpus-id:
+    description: Ready immutable replay corpus UUID
+    required: true
+  base-image:
+    description: Locally available base image digest
+    required: true
+  candidate-image:
+    description: Locally available candidate image digest
+    required: true
+  replay-image:
+    description: Pinned Hyrum Go tools image
+    required: true
+  audience:
+    description: GitHub OIDC audience configured by the Hyrum control plane
+    default: hyrum-control-plane
+  attempts:
+    description: Differential attempts for changed cases
+    default: "2"
+  target-port:
+    description: HTTP port exposed by both API images
+    default: "8080"
+
+runs:
+  using: composite
+  steps:
+    - name: Request one-use replay bundle
+      shell: bash
+      env:
+        HYRUM_CONTROL_PLANE_URL: ${{ inputs.control-plane-url }}
+        HYRUM_SERVICE_SLUG: ${{ inputs.service-slug }}
+        HYRUM_CORPUS_ID: ${{ inputs.corpus-id }}
+        HYRUM_BASE_IMAGE: ${{ inputs.base-image }}
+        HYRUM_CANDIDATE_IMAGE: ${{ inputs.candidate-image }}
+        HYRUM_OIDC_AUDIENCE: ${{ inputs.audience }}
+      run: |
+        set -euo pipefail
+        test "${GITHUB_EVENT_NAME}" = "pull_request" || { echo "Hyrum replay only accepts pull_request events" >&2; exit 1; }
+        test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" -a -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "Grant id-token: write to this job" >&2; exit 1; }
+        umask 077
+        work="${RUNNER_TEMP}/hyrum-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        rm -rf "${work}"
+        mkdir -p "${work}"
+        openssl genpkey -algorithm ED25519 -out "${work}/signing.pem" >/dev/null 2>&1
+        public_key="$(openssl pkey -in "${work}/signing.pem" -pubout -outform DER | base64 -w0)"
+        private_key="$(openssl pkey -in "${work}/signing.pem" -outform DER | base64 -w0)"
+        oidc_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=$(printf '%s' "${HYRUM_OIDC_AUDIENCE}" | jq -sRr @uri)"
+        oidc_token="$(curl --fail --silent --show-error -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${oidc_url}" | jq -er .value)"
+        pr_number="$(jq -er '.pull_request.number' "${GITHUB_EVENT_PATH}")"
+        jq -n \
+          --arg serviceSlug "${HYRUM_SERVICE_SLUG}" \
+          --arg replayCorpusId "${HYRUM_CORPUS_ID}" \
+          --arg baseImageDigest "${HYRUM_BASE_IMAGE}" \
+          --arg candidateImageDigest "${HYRUM_CANDIDATE_IMAGE}" \
+          --arg triggerIdempotencyKey "github:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+          --arg runnerVersion "github-action-v1" \
+          --arg reportSigningPublicKey "${public_key}" \
+          --arg signingKeyId "github:${GITHUB_RUN_ID}" \
+          --argjson pullRequestNumber "${pr_number}" \
+          '{serviceSlug:$serviceSlug,replayCorpusId:$replayCorpusId,baseImageDigest:$baseImageDigest,candidateImageDigest:$candidateImageDigest,triggerIdempotencyKey:$triggerIdempotencyKey,runnerVersion:$runnerVersion,reportSigningPublicKey:$reportSigningPublicKey,signingKeyId:$signingKeyId,pullRequestNumber:$pullRequestNumber}' > "${work}/request.json"
+        curl --fail --silent --show-error \
+          -H "Authorization: Bearer ${oidc_token}" \
+          -H "Content-Type: application/json" \
+          --data-binary "@${work}/request.json" \
+          "${HYRUM_CONTROL_PLANE_URL%/}/v1/github-actions/replays" > "${work}/response.json"
+        jq --arg privateKey "${private_key}" \
+          --arg baseImageDigest "${HYRUM_BASE_IMAGE}" \
+          --arg candidateImageDigest "${HYRUM_CANDIDATE_IMAGE}" \
+          '.runnerCredential + {replayRunId:.run.id,baseImageDigest:$baseImageDigest,candidateImageDigest:$candidateImageDigest,runnerVersion:.run.runnerVersion,reportSigningPrivateKey:$privateKey}' \
+          "${work}/response.json" > "${work}/bundle.json"
+        rm -f "${work}/request.json" "${work}/response.json" "${work}/signing.pem"
+        echo "bundle=${work}/bundle.json" >> "${GITHUB_OUTPUT}"
+      id: bundle
+
+    - name: Run isolated differential replay
+      shell: bash
+      env:
+        HYRUM_REPLAY_IMAGE: ${{ inputs.replay-image }}
+        HYRUM_CONTROL_PLANE_URL: ${{ inputs.control-plane-url }}
+        HYRUM_ATTEMPTS: ${{ inputs.attempts }}
+        HYRUM_TARGET_PORT: ${{ inputs.target-port }}
+        HYRUM_BUNDLE: ${{ steps.bundle.outputs.bundle }}
+      run: |
+        set -euo pipefail
+        trap 'rm -f "${HYRUM_BUNDLE}"' EXIT
+        docker run --rm --user 0 --network host \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "${HYRUM_BUNDLE}:/work/bundle.json:ro" \
+          --entrypoint hyrum-replay \
+          "${HYRUM_REPLAY_IMAGE}" \
+          --bundle /work/bundle.json \
+          --control-plane-url "${HYRUM_CONTROL_PLANE_URL}" \
+          --attempts "${HYRUM_ATTEMPTS}" \
+          --target-port "${HYRUM_TARGET_PORT}"

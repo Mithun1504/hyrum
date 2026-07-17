@@ -54,7 +54,6 @@ export const evaluationDatasets = pgTable(
       table.name,
       table.version,
     ),
-    uniqueIndex("evaluation_datasets_digest_uq").on(table.datasetDigest),
     foreignKey({
       name: "evaluation_datasets_object_fk",
       columns: [table.organizationId, table.storedObjectId],
@@ -181,15 +180,15 @@ export const usageRollups = pgTable(
       .generatedAlwaysAs(
         sql`coalesce(api_service_id, '00000000-0000-0000-0000-000000000000'::uuid)`,
       ),
-    ingestedSessions: bigint("ingested_sessions", { mode: "number" }).notNull().default(0),
-    observedRequestsEstimate: bigint("observed_requests_estimate", { mode: "number" })
+    ingestedSessions: bigint("ingested_sessions", { mode: "bigint" }).notNull().default(sql`0`),
+    observedRequestsEstimate: bigint("observed_requests_estimate", { mode: "bigint" })
       .notNull()
-      .default(0),
-    storedBytes: bigint("stored_bytes", { mode: "number" }).notNull().default(0),
-    replayRequests: bigint("replay_requests", { mode: "number" }).notNull().default(0),
-    llmInputTokens: bigint("llm_input_tokens", { mode: "number" }).notNull().default(0),
-    llmOutputTokens: bigint("llm_output_tokens", { mode: "number" }).notNull().default(0),
-    llmCostMicrounits: bigint("llm_cost_microunits", { mode: "number" }).notNull().default(0),
+      .default(sql`0`),
+    storedBytes: bigint("stored_bytes", { mode: "bigint" }).notNull().default(sql`0`),
+    replayRequests: bigint("replay_requests", { mode: "bigint" }).notNull().default(sql`0`),
+    llmInputTokens: bigint("llm_input_tokens", { mode: "bigint" }).notNull().default(sql`0`),
+    llmOutputTokens: bigint("llm_output_tokens", { mode: "bigint" }).notNull().default(sql`0`),
+    llmCostMicrounits: bigint("llm_cost_microunits", { mode: "bigint" }).notNull().default(sql`0`),
     jobFailures: integer("job_failures").notNull().default(0),
     ...mutableTimestamps(),
   },

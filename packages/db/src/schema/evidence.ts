@@ -30,6 +30,7 @@ import {
   objectAvailability,
   receiptType,
   reviewState,
+  sessionCompleteness,
 } from "./shared/enums";
 import { storedObjects } from "./storage";
 
@@ -51,9 +52,9 @@ export const receipts = pgTable(
     extractorReleaseId: uuid("extractor_release_id")
       .notNull()
       .references(() => extractorReleases.id, { onDelete: "restrict" }),
-    sequenceStart: bigint("sequence_start", { mode: "number" }).notNull(),
-    sequenceEnd: bigint("sequence_end", { mode: "number" }).notNull(),
-    completeness: text("completeness").notNull(),
+    sequenceStart: bigint("sequence_start", { mode: "bigint" }).notNull(),
+    sequenceEnd: bigint("sequence_end", { mode: "bigint" }).notNull(),
+    completeness: sessionCompleteness("completeness").notNull(),
     approvedExcerpt: text("approved_excerpt"),
     availabilityStatus: objectAvailability("availability_status").notNull().default("pending"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -122,7 +123,7 @@ export const dependencyClaims = pgTable(
     status: claimStatus("status").notNull().default("proposed"),
     ruleVersion: text("rule_version").notNull(),
     deterministicEligible: boolean("deterministic_eligible").notNull().default(false),
-    supportCount: bigint("support_count", { mode: "number" }).notNull(),
+    supportCount: bigint("support_count", { mode: "bigint" }).notNull(),
     confidence: numeric("confidence", { precision: 5, scale: 4 }),
     effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull(),
     effectiveUntil: timestamp("effective_until", { withTimezone: true }),
@@ -178,8 +179,8 @@ export const dependencyClaims = pgTable(
       sql`${table.tier} <> 't1' or ${table.deterministicEligible}`,
     ),
     check(
-      "dependency_claims_t3_confidence_ck",
-      sql`${table.tier} <> 't3' or ${table.confidence} is null`,
+      "dependency_claims_confidence_tier_ck",
+      sql`${table.tier} = 't2' or ${table.confidence} is null`,
     ),
     check(
       "dependency_claims_confidence_ck",
@@ -198,8 +199,8 @@ export const claimEvidence = pgTable(
     dependencyClaimId: uuid("dependency_claim_id").notNull(),
     receiptId: uuid("receipt_id").notNull(),
     evidenceRole: evidenceRole("evidence_role").notNull(),
-    responseSequenceNo: bigint("response_sequence_no", { mode: "number" }),
-    requestSequenceNo: bigint("request_sequence_no", { mode: "number" }),
+    responseSequenceNo: bigint("response_sequence_no", { mode: "bigint" }),
+    requestSequenceNo: bigint("request_sequence_no", { mode: "bigint" }),
     responseJsonPath: text("response_json_path"),
     requestJsonPath: text("request_json_path"),
     valueHmac: text("value_hmac"),

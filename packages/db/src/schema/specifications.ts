@@ -102,6 +102,13 @@ export const apiOperations = pgTable(
       columns: [table.organizationId, table.apiServiceId],
       foreignColumns: [apiServices.organizationId, apiServices.id],
     }).onDelete("cascade"),
+    index("api_operations_path_trgm_idx").using(
+      "gin",
+      sql`${table.normalizedPathTemplate} gin_trgm_ops`,
+    ),
+    index("api_operations_display_name_trgm_idx")
+      .using("gin", sql`${table.displayName} gin_trgm_ops`)
+      .where(sql`${table.displayName} is not null`),
   ],
 );
 
