@@ -59,6 +59,7 @@ function snapshotWithDeltas(deltas: ReplayDelta[]): WorkspaceSnapshot {
     dataMode: "live",
     dataErrors: [],
     role: "engineer",
+    summary: null,
     permissions: { canPinAssertion: true, reason: null },
     filters: { query: "", selectedId: null, tier: "all", kind: "all", state: "all" },
     consumers: [],
@@ -96,7 +97,6 @@ function snapshotWithDeltas(deltas: ReplayDelta[]): WorkspaceSnapshot {
     },
     progressEvents: [],
     defaultAssertionExpiry: "2026-10-13T08:00:00.000Z",
-    metrics: { precision: 0.97, recall: 0.91, stability: 0.997, labeledCases: 128 },
   };
 }
 
@@ -126,5 +126,7 @@ function ledgerRow(tier: EvidenceTier): LedgerRow {
     evidence_summary: "Redacted receipt is available.",
     owner: "Platform API",
     receipt_digest: null,
+    observation_count: 12,
+    session_count: 3,
   };
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { geistMono, geistSans } from "@/lib/fonts";
-import { isDemoDataEnabled } from "@/services/control-plane";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -21,8 +20,7 @@ export default function RootLayout({
     process.env.WORKOS_CLIENT_ID &&
       process.env.WORKOS_API_KEY &&
       process.env.WORKOS_COOKIE_PASSWORD &&
-      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI &&
-      !isDemoDataEnabled(),
+      process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
   );
 
   return (

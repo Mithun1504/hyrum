@@ -3,11 +3,7 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import {
-  controlPlaneBaseUrl,
-  createControlPlane,
-  isDemoDataEnabled,
-} from "@/services/control-plane";
+import { controlPlaneBaseUrl, createControlPlane } from "@/services/control-plane";
 
 const assertionInputSchema = z.object({
   behavior_id: z.string().uuid(),
@@ -74,13 +70,6 @@ export async function pinAssertionAction(
       message: parsed.error.issues[0]?.message ?? "Assertion input is invalid.",
     };
   }
-  if (isDemoDataEnabled()) {
-    return {
-      status: "success",
-      message: "Demo assertion validated. No production data was changed.",
-    };
-  }
-
   try {
     const { accessToken } = await withAuth({ ensureSignedIn: true });
     const assertion = await createControlPlane(accessToken).pinAssertion({
@@ -105,35 +94,6 @@ export async function draftSpecAction(
 ): Promise<SpecDraftState> {
   const assertionId = z.string().uuid().safeParse(formData.get("assertion_id"));
   if (!assertionId.success) return { status: "error", message: "Select a valid assertion first." };
-  if (isDemoDataEnabled()) {
-    return {
-      status: "success",
-      message: "Demo spec draft generated without changing production data.",
-      title: "Document the 422 error template contract",
-      summary: "Add the observed validation message as a compatibility note for support sync.",
-      patch: [
-        "paths:",
-        "  /v1/orders:",
-        "    post:",
-        "      responses:",
-        "        '422':",
-        "          description: Validation failed; support sync depends on the SKU-unavailable template.",
-        "          x-hyrum-assertion: 99999999-9999-4999-8999-999999999999",
-      ].join("\n"),
-      citations: [
-        {
-          resource_type: "receipt",
-          resource_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeea",
-        },
-        {
-          resource_type: "replay_delta",
-          resource_id: "sha256:delta-422-template",
-        },
-      ],
-      uncertainty: 0.18,
-    };
-  }
-
   try {
     const { accessToken } = await withAuth({ ensureSignedIn: true });
     const response = await fetch(

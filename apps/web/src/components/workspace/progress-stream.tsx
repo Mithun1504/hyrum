@@ -1,7 +1,8 @@
 "use client";
 
 import { progressEventTopics } from "@hyrum/api-client";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { ProgressEvent } from "@/services/workspace-data";
 
@@ -14,6 +15,8 @@ export function ProgressStream({
   initialEvents: ProgressEvent[];
   live: boolean;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [events, setEvents] = useState<DisplayEvent[]>(
     initialEvents.map((event) => ({
       id: String(event.id),
@@ -27,22 +30,25 @@ export function ProgressStream({
   useEffect(() => {
     if (!live) return;
 
-    const source = new EventSource("/api/progress");
+    const lastEventId = initialEvents.at(-1)?.id ?? 0;
+    const source = new EventSource(`/api/progress?last_event_id=${lastEventId}`);
     const listeners = progressEventTopics.map((topic) => {
       const listener = (event: MessageEvent<string>) => {
         const id = event.lastEventId || crypto.randomUUID();
+        const parsed = parseProgressData(event.data);
         setEvents((current) =>
           [
             ...current.filter((item) => item.id !== id),
             {
               id,
               topic,
-              resource_id: null,
-              created_at: new Date().toISOString(),
+              resource_id: parsed.resource_id,
+              created_at: parsed.created_at,
             },
           ].slice(-8),
         );
         setStreamUnavailable(false);
+        startTransition(() => router.refresh());
       };
       source.addEventListener(topic, listener as EventListener);
       return { topic, listener };
@@ -55,19 +61,19 @@ export function ProgressStream({
       }
       source.close();
     };
-  }, [live]);
+  }, [initialEvents, live, router]);
 
   return (
-    <section className="mt-6 rounded-xl border border-border bg-card">
-      <div className="flex items-center border-b border-border px-4 py-3 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        Progress
+    <section className="glass-panel mt-5 overflow-hidden rounded-2xl">
+      <div className="flex items-center border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Live evidence stream
         {live ? <span className="ml-auto normal-case tracking-normal">live</span> : null}
       </div>
       <div className="divide-y divide-border">
         {events.map((event) => (
           <div
             key={event.id}
-            className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-3 text-xs"
+            className="motion-lift flex min-w-0 flex-wrap items-center gap-3 px-4 py-3 text-xs hover:bg-secondary/45"
           >
             <Badge variant="outline" className="text-tier-proof">
               {event.topic}
@@ -93,4 +99,24 @@ export function ProgressStream({
       </div>
     </section>
   );
+}
+
+function parseProgressData(data: string): {
+  resource_id: string | null;
+  created_at: string;
+} {
+  try {
+    const parsed: unknown = JSON.parse(data);
+    if (typeof parsed === "object" && parsed !== null) {
+      const record = parsed as Record<string, unknown>;
+      return {
+        resource_id: typeof record.resource_id === "string" ? record.resource_id : null,
+        created_at:
+          typeof record.created_at === "string" ? record.created_at : new Date().toISOString(),
+      };
+    }
+  } catch {
+    // A malformed event must not disconnect an otherwise healthy stream.
+  }
+  return { resource_id: null, created_at: new Date().toISOString() };
 }

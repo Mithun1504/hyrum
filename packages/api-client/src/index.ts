@@ -10,6 +10,7 @@ import {
   type PinAssertionRequest,
   type ProblemDetails,
   problemDetailsSchema,
+  progressEventListSchema,
   type ReplayReport,
   receiptSchema,
   replayReportResponseSchema,
@@ -17,6 +18,7 @@ import {
   sessionResponseSchema,
   type UploadApiSpecRequest,
   type UpsertGatePolicyRequest,
+  workspaceSummarySchema,
 } from "@hyrum/contracts";
 import { z } from "zod";
 
@@ -100,6 +102,14 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions) {
     async listConsumers() {
       const response = await request("/v1/consumers");
       return consumerListSchema.parse(await response.json()).consumers;
+    },
+    async getWorkspaceSummary() {
+      const response = await request("/v1/workspace/summary");
+      return workspaceSummarySchema.parse(await response.json());
+    },
+    async listProgressEvents(limit = 20) {
+      const response = await request(`/v1/progress?limit=${encodeURIComponent(String(limit))}`);
+      return progressEventListSchema.parse(await response.json()).events;
     },
     async getReceipt(id: string) {
       const response = await request(`/v1/receipts/${id}`);

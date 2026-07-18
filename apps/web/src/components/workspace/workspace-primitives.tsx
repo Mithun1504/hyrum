@@ -1,4 +1,4 @@
-import { Eye } from "lucide-react";
+import { AlertTriangle, Eye, Sparkles } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { TierBadge } from "@/components/workspace/tier-badge";
@@ -15,9 +15,16 @@ export function PageIntro({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-start">
-      <h1 className="font-sans text-xl font-bold leading-tight md:text-2xl">{title}</h1>
-      <p className="max-w-2xl text-xs leading-6 text-muted-foreground">{desc}</p>
+    <div className="mb-7 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <div>
+        <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
+          <Sparkles className="size-3" /> Evidence workspace
+        </div>
+        <h1 className="text-2xl font-semibold leading-tight tracking-[-0.025em] md:text-3xl">
+          {title}
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{desc}</p>
+      </div>
       {actions ? <div className="flex flex-wrap gap-2 lg:justify-end">{actions}</div> : null}
     </div>
   );
@@ -26,10 +33,11 @@ export function PageIntro({
 export function DataStatusBanner({ errors }: { errors: string[] }) {
   return (
     <section
-      className="mb-6 border border-destructive/50 bg-destructive/10 px-4 py-3"
+      className="glass-panel mb-6 rounded-2xl border-destructive/40 bg-destructive/8 px-4 py-4"
       role="status"
     >
-      <h2 className="font-sans text-sm font-bold text-destructive">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+        <AlertTriangle className="size-4" aria-hidden="true" />
         Control plane data is incomplete
       </h2>
       <p className="mt-1 text-xs text-muted-foreground">
@@ -62,7 +70,7 @@ export function LedgerTable({
             href={behaviorHref(row)}
             prefetch={false}
             className={cn(
-              "grid min-h-20 gap-2 rounded-lg border border-border bg-industrial-3 p-4 text-xs transition-colors duration-150 ease-out hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "motion-lift grid min-h-24 gap-2 rounded-xl border border-border bg-card p-4 text-xs",
               selectedId === row.id && "border-tier-proof/60 bg-tier-proof/10",
             )}
           >
@@ -75,7 +83,7 @@ export function LedgerTable({
           </Link>
         ))}
       </div>
-      <div className="hidden overflow-x-auto md:block">
+      <div className="scrollbar-thin hidden overflow-x-auto md:block">
         <table className="w-full min-w-[680px] border-collapse text-left text-[11px]">
           <thead>
             <tr className="border-b border-border text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -90,7 +98,7 @@ export function LedgerTable({
               <tr
                 key={row.id}
                 className={cn(
-                  "border-b border-border/70 hover:bg-secondary/50",
+                  "border-b border-border/70 transition-colors hover:bg-secondary/55",
                   selectedId === row.id && "bg-tier-proof/10",
                 )}
               >
@@ -141,14 +149,14 @@ export function CodeBlock({
   return (
     <div
       className={cn(
-        "mt-4 min-w-0 rounded-lg border border-input bg-industrial-3 p-3",
+        "surface-grid mt-4 min-w-0 rounded-xl border border-input bg-industrial-3/80 p-4",
         compact && "mt-0",
       )}
     >
       <div className="mb-2 text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </div>
-      <pre className="max-w-full whitespace-pre-wrap break-words text-[11px] leading-6 text-foreground">
+      <pre className="scrollbar-thin max-w-full overflow-auto whitespace-pre-wrap break-words text-[11px] leading-6 text-foreground">
         <code>{code}</code>
       </pre>
     </div>
@@ -170,7 +178,7 @@ export function SelectFilter({
       <select
         name={name}
         defaultValue={value}
-        className="h-11 rounded-md border border-input bg-background px-3 text-xs normal-case tracking-normal text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="h-11 rounded-xl border border-input bg-background/75 px-3 text-xs normal-case tracking-normal text-foreground"
       >
         {options.map((option) => (
           <option key={option}>{option}</option>
@@ -192,9 +200,9 @@ export function StatCard({
   down?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-card p-4">
+    <div className="glass-panel motion-lift min-w-0 rounded-2xl p-4">
       <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      <div className="mt-1 font-sans text-2xl font-bold">{value}</div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
       <div className={cn("text-[10px] text-tier-proof", down && "text-destructive")}>{delta}</div>
     </div>
   );
@@ -202,9 +210,9 @@ export function StatCard({
 
 export function StatCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-b border-r border-border p-4 md:border-b-0">
+    <div className="p-4 first:rounded-l-2xl last:rounded-r-2xl md:border-r md:last:border-r-0">
       <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      <div className="mt-1 font-sans text-xl font-bold">{value}</div>
+      <div className="mt-1 text-xl font-semibold tracking-tight">{value}</div>
     </div>
   );
 }
@@ -257,11 +265,13 @@ export function EmptyPanel({
   description?: string;
 }) {
   return (
-    <div className="grid min-h-56 place-items-center p-8 text-center">
+    <div className="glass-panel grid min-h-64 place-items-center rounded-2xl p-8 text-center">
       <div>
-        <Eye className="mx-auto size-6 text-muted-foreground" aria-hidden="true" />
-        <h2 className="mt-3 font-sans text-base font-bold">{title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-secondary text-primary">
+          <Eye className="size-5" aria-hidden="true" />
+        </span>
+        <h2 className="mt-4 text-base font-semibold">{title}</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   );

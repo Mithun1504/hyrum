@@ -13,6 +13,7 @@
     "db:check": "pnpm --filter @hyrum/db db:check",
     "db:generate": "pnpm --filter @hyrum/db db:generate",
     "db:migrate": "pnpm --filter @hyrum/db db:migrate",
+    "db:seed": "pnpm --filter @hyrum/db db:seed",
     "db:studio": "pnpm --filter @hyrum/db db:studio",
     "demo:api:base": "DEMO_VARIANT=base PORT=4100 node demo/api/server.mjs",
     "demo:api:candidate": "DEMO_VARIANT=candidate PORT=4200 node demo/api/server.mjs",

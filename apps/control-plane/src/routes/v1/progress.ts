@@ -1,10 +1,47 @@
-import { and, asc, eq, gt, progressEvents, withTenant } from "@hyrum/db";
+import { progressEventListSchema, progressEventSchema } from "@hyrum/contracts";
+import { and, asc, desc, eq, gt, progressEvents, withTenant } from "@hyrum/db";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { acquireProgressStream, startSingleFlightPolling } from "../../domain/progress-stream";
 import { requireContext } from "./helpers";
 
 export const progressRoutes: FastifyPluginAsyncZod = async (app) => {
+  app.get(
+    "/progress",
+    {
+      preHandler: app.requireHumanPermission("ledger:read"),
+      schema: {
+        tags: ["progress"],
+        security: [{ bearerAuth: [] }],
+        querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }),
+        response: { 200: progressEventListSchema },
+      },
+    },
+    async (request) => {
+      const context = requireContext(app, request.authContext);
+      const rows = await withTenant(app.database.db, context.organizationId, (tx) =>
+        tx
+          .select()
+          .from(progressEvents)
+          .where(eq(progressEvents.organizationId, context.organizationId))
+          .orderBy(desc(progressEvents.id))
+          .limit(request.query.limit),
+      );
+      return {
+        events: rows.reverse().map((row) =>
+          progressEventSchema.parse({
+            id: row.id,
+            organization_id: row.organizationId,
+            topic: row.topic,
+            resource_id: row.resourceId,
+            payload: row.payload,
+            created_at: row.createdAt.toISOString(),
+          }),
+        ),
+      };
+    },
+  );
+
   app.get(
     "/progress/stream",
     {
@@ -45,7 +82,9 @@ export const progressRoutes: FastifyPluginAsyncZod = async (app) => {
           lastEventId = row.id;
           reply.raw.write(`id: ${row.id}\n`);
           reply.raw.write(`event: ${row.topic}\n`);
-          reply.raw.write(`data: ${JSON.stringify(row.payload)}\n\n`);
+          reply.raw.write(
+            `data: ${JSON.stringify({ resource_id: row.resourceId, payload: row.payload, created_at: row.createdAt.toISOString() })}\n\n`,
+          );
         }
       };
 

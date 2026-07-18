@@ -112,6 +112,7 @@ export const replayRunDetailResponseSchema = z
     runner_version: z.string(),
     policy_id: z.uuid(),
     policy_version: z.number().int().positive(),
+    runs: z.number().int().positive(),
     outcome: z.enum(["pass", "warn", "block"]),
     decision: z
       .object({

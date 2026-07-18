@@ -44,6 +44,13 @@ export const ledgerEntrySchema = z.object({
   last_seen_at: isoDateTimeSchema,
   freshness_until: isoDateTimeSchema,
   receipt_id: z.uuid().nullable(),
+  endpoint: z.string(),
+  consumer_alias: z.string(),
+  consumer_stable_id: z.string(),
+  observation_count: z.number().int().nonnegative(),
+  session_count: z.number().int().nonnegative(),
+  owner: z.string().nullable(),
+  receipt_digest: z.string().nullable(),
 });
 export type LedgerEntry = z.infer<typeof ledgerEntrySchema>;
 
@@ -154,3 +161,23 @@ export const progressEventSchema = z.object({
   created_at: isoDateTimeSchema,
 });
 export type ProgressEvent = z.infer<typeof progressEventSchema>;
+
+export const workspaceSummarySchema = z.object({
+  organization: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    region: z.string(),
+    retention_days: z.number().int().positive(),
+  }),
+  capture: z.object({
+    endpoint_count: z.number().int().nonnegative(),
+    consumer_count: z.number().int().nonnegative(),
+    sessions_24h: z.number().int().nonnegative(),
+    evidence_events_24h: z.number().int().nonnegative(),
+  }),
+});
+export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>;
+
+export const progressEventListSchema = z.object({
+  events: z.array(progressEventSchema),
+});

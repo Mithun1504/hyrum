@@ -1,15 +1,5 @@
 import type { ProgressEventTopic } from "@hyrum/api-client";
 import { createControlPlane } from "@/services/control-plane";
-import {
-  assertions as demoAssertions,
-  consumers as demoConsumers,
-  in90Days as demoDefaultAssertionExpiry,
-  gatePolicy as demoGatePolicy,
-  ledgerRows as demoLedgerRows,
-  progressEvents as demoProgressEvents,
-  receipts as demoReceipts,
-  replayReport as demoReplayReport,
-} from "@/services/workspace-demo-data";
 
 export type EvidenceTier = "T1" | "T2" | "T3";
 export type BehaviorKind = "shape" | "ordering" | "error" | "status";
@@ -35,6 +25,13 @@ export type LedgerEntry = {
   last_seen_at: string;
   freshness_until: string;
   receipt_id: string | null;
+  endpoint: string;
+  consumer_alias: string;
+  consumer_stable_id: string;
+  observation_count: number;
+  session_count: number;
+  owner: string | null;
+  receipt_digest: string | null;
 };
 
 export type Receipt = {
@@ -130,20 +127,26 @@ export type FilterState = {
 };
 
 export type LedgerRow = LedgerEntry & {
-  endpoint: string;
-  consumer_alias: string;
-  consumer_stable_id: string;
   impact: string;
   evidence_summary: string;
-  owner: string;
-  receipt_digest: string | null;
+};
+
+export type WorkspaceSummary = {
+  organization: { id: string; name: string; region: string; retention_days: number };
+  capture: {
+    endpoint_count: number;
+    consumer_count: number;
+    sessions_24h: number;
+    evidence_events_24h: number;
+  };
 };
 
 export type WorkspaceSnapshot = {
   apiStatus: "ok" | "degraded" | "unavailable";
-  dataMode: "live" | "demo";
+  dataMode: "live";
   dataErrors: string[];
   role: "owner" | "admin" | "engineer" | "viewer";
+  summary: WorkspaceSummary | null;
   permissions: {
     canPinAssertion: boolean;
     reason: string | null;
@@ -159,12 +162,6 @@ export type WorkspaceSnapshot = {
   replayReport: ReplayReport | null;
   progressEvents: ProgressEvent[];
   defaultAssertionExpiry: string;
-  metrics: {
-    precision: number;
-    recall: number;
-    stability: number;
-    labeledCases: number;
-  } | null;
 };
 
 type WorkspaceApi = {
@@ -176,6 +173,8 @@ type WorkspaceApi = {
   listAssertions(): Promise<Assertion[]>;
   getPolicy(): Promise<GatePolicy>;
   getLatestReplayRun(): Promise<ReplayRunDetail>;
+  getWorkspaceSummary(): Promise<WorkspaceSummary>;
+  listProgressEvents(limit?: number): Promise<ProgressEvent[]>;
 };
 
 type ReplayRunDetail = {
@@ -187,6 +186,7 @@ type ReplayRunDetail = {
   candidate_image_digest: string;
   extractor_version: string;
   corpus_digest: string;
+  runs: number;
   decision: ReplayReport["decision"];
   deltas: Array<
     Omit<ReplayDelta, "matches"> & {
@@ -201,7 +201,6 @@ type ReplayRunDetail = {
 
 type WorkspaceDataOptions = {
   accessToken?: string;
-  demoMode?: boolean;
   client?: WorkspaceApi;
 };
 
@@ -226,8 +225,6 @@ export async function getWorkspaceSnapshot(
   filters: FilterState,
   options: WorkspaceDataOptions = {},
 ): Promise<WorkspaceSnapshot> {
-  if (options.demoMode) return getDemoWorkspaceSnapshot(filters);
-
   const client: WorkspaceApi = options.client ?? createControlPlane(options.accessToken);
   const [
     healthResult,
@@ -237,6 +234,8 @@ export async function getWorkspaceSnapshot(
     assertionsResult,
     policyResult,
     replayResult,
+    summaryResult,
+    progressResult,
   ] = await Promise.allSettled([
     client.health(),
     client.session(),
@@ -245,6 +244,8 @@ export async function getWorkspaceSnapshot(
     client.listAssertions(),
     client.getPolicy(),
     client.getLatestReplayRun(),
+    client.getWorkspaceSummary(),
+    client.listProgressEvents(20),
   ]);
   const dataErrors = [
     failureMessage("Health", healthResult),
@@ -254,12 +255,11 @@ export async function getWorkspaceSnapshot(
     failureMessage("Assertions", assertionsResult),
     failureMessage("Policy", policyResult),
     failureMessage("Replay", replayResult),
+    failureMessage("Workspace summary", summaryResult),
+    failureMessage("Progress", progressResult),
   ].filter((message): message is string => message !== null);
   const liveConsumers = fulfilledValue(consumersResult) ?? [];
-  const consumerById = new Map(liveConsumers.map((consumer) => [consumer.id, consumer]));
-  const liveRows = (fulfilledValue(ledgerResult) ?? []).map((entry) =>
-    toLedgerRow(entry, consumerById.get(entry.consumer_id)),
-  );
+  const liveRows = (fulfilledValue(ledgerResult) ?? []).map(toLedgerRow);
   const selectedRows = filterLedgerRows(filters, liveRows);
   const selected = liveRows.find((row) => row.id === filters.selectedId) ?? selectedRows[0] ?? null;
   let receipt: Receipt | null = null;
@@ -292,6 +292,7 @@ export async function getWorkspaceSnapshot(
     dataMode: "live",
     dataErrors,
     role: session?.role ?? "viewer",
+    summary: fulfilledValue(summaryResult),
     permissions: {
       canPinAssertion,
       reason: canPinAssertion ? null : "Your Hyrum organization role cannot pin assertions.",
@@ -305,9 +306,8 @@ export async function getWorkspaceSnapshot(
     assertions: fulfilledValue(assertionsResult) ?? [],
     gatePolicy: fulfilledValue(policyResult),
     replayReport: toReplayReport(fulfilledValue(replayResult), liveRows),
-    progressEvents: [],
+    progressEvents: fulfilledValue(progressResult) ?? [],
     defaultAssertionExpiry: new Date(Date.now() + 90 * 86_400_000).toISOString(),
-    metrics: null,
   };
 }
 
@@ -344,42 +344,14 @@ function toReplayReport(run: ReplayRunDetail | null, rows: LedgerRow[] = []): Re
     candidate_image_digest: run.candidate_image_digest,
     extractor_version: run.extractor_version,
     corpus_digest: run.corpus_digest,
-    runs: null,
+    runs: run.runs,
     results: [...results.values()],
     decision: run.decision,
     assertion_results: run.assertion_results,
   };
 }
 
-function getDemoWorkspaceSnapshot(filters: FilterState): WorkspaceSnapshot {
-  const selectedRows = filterLedgerRows(filters, demoLedgerRows);
-  const selected =
-    demoLedgerRows.find((row) => row.id === filters.selectedId) ?? selectedRows[0] ?? null;
-
-  return {
-    apiStatus: "ok",
-    dataMode: "demo",
-    dataErrors: [],
-    role: "engineer",
-    permissions: { canPinAssertion: true, reason: null },
-    filters,
-    consumers: demoConsumers,
-    allLedgerRows: demoLedgerRows,
-    ledgerRows: selectedRows,
-    selected,
-    receipt: demoReceipts.find((item) => item.id === selected?.receipt_id) ?? null,
-    assertions: demoAssertions,
-    gatePolicy: demoGatePolicy,
-    replayReport: demoReplayReport,
-    progressEvents: demoProgressEvents,
-    defaultAssertionExpiry: demoDefaultAssertionExpiry,
-    metrics: { precision: 0.97, recall: 0.91, stability: 0.997, labeledCases: 128 },
-  };
-}
-
-function toLedgerRow(entry: LedgerEntry, consumer?: Consumer): LedgerRow {
-  const shortOperation = entry.operation_id?.slice(0, 8);
-  const shortConsumer = entry.consumer_id.slice(0, 8);
+function toLedgerRow(entry: LedgerEntry): LedgerRow {
   const impact =
     entry.tier === "T1"
       ? "Proven echo dependency. A matching deterministic replay delta can block."
@@ -389,15 +361,8 @@ function toLedgerRow(entry: LedgerEntry, consumer?: Consumer): LedgerRow {
 
   return {
     ...entry,
-    endpoint: shortOperation ? `Operation ${shortOperation}` : "Unscoped operation",
-    consumer_alias: consumer?.display_alias ?? `Consumer ${shortConsumer}`,
-    consumer_stable_id: consumer?.stable_id ?? entry.consumer_id,
     impact,
-    evidence_summary: entry.receipt_id
-      ? "Redacted receipt is available for this behavior."
-      : "No receipt is attached to this ledger entry.",
-    owner: "Unassigned",
-    receipt_digest: null,
+    evidence_summary: `${entry.observation_count} observations across ${entry.session_count} captured sessions${entry.receipt_digest ? `; receipt ${entry.receipt_digest}` : "; no active receipt"}.`,
   };
 }
 

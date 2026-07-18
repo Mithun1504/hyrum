@@ -8,9 +8,6 @@ const workosConfigured = Boolean(
     process.env.WORKOS_COOKIE_PASSWORD &&
     process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
 );
-const localAuthBypass =
-  process.env.HYRUM_E2E_AUTH_BYPASS === "1" && process.env.NODE_ENV !== "production";
-
 export default workosConfigured
   ? authkitProxy({
       middlewareAuth: {
@@ -19,9 +16,6 @@ export default workosConfigured
       },
     })
   : function unconfiguredAuthProxy(request: NextRequest) {
-      if (localAuthBypass && request.nextUrl.pathname.startsWith("/app")) {
-        return NextResponse.next();
-      }
       const protectedPath =
         request.nextUrl.pathname.startsWith("/app") ||
         request.nextUrl.pathname.startsWith("/sign-in") ||

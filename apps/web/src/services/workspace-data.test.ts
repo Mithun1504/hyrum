@@ -10,31 +10,11 @@ const unavailableClient = {
   listAssertions: async () => Promise.reject(new Error("connection refused")),
   getPolicy: async () => Promise.reject(new Error("connection refused")),
   getLatestReplayRun: async () => Promise.reject(new Error("connection refused")),
+  getWorkspaceSummary: async () => Promise.reject(new Error("connection refused")),
+  listProgressEvents: async () => Promise.reject(new Error("connection refused")),
 };
 
 describe("workspace data", () => {
-  it("exposes demo replay assertion results with the required contract shape", async () => {
-    const filters = parseFilters(new URLSearchParams());
-    const snapshot = await getWorkspaceSnapshot(filters, { demoMode: true });
-
-    expect(snapshot.replayReport?.assertion_results).toEqual([
-      {
-        assertion_id: "99999999-9999-4999-8999-999999999999",
-        behavior_id: "cccccccc-cccc-4ccc-8ccc-ccccccccccca",
-        claim_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbba",
-        case_id: "orders-validation-template",
-        outcome: "fail",
-      },
-      {
-        assertion_id: "99999999-9999-4999-8999-999999999998",
-        behavior_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccb",
-        claim_id: null,
-        case_id: "products-legacy-id-preserved",
-        outcome: "pass",
-      },
-    ]);
-  });
-
   it("keeps live replay assertion results from the control plane", async () => {
     const filters = parseFilters(new URLSearchParams());
     const assertionResult = {
@@ -67,6 +47,7 @@ describe("workspace data", () => {
         candidate_image_digest: `sha256:${"b".repeat(64)}`,
         extractor_version: "extractors-go-0.4.1",
         corpus_digest: "sha256:fixture-50k",
+        runs: 3,
         decision: {
           outcome: "pass" as const,
           block_count: 0,
@@ -77,6 +58,21 @@ describe("workspace data", () => {
         deltas: [],
         assertion_results: [assertionResult],
       }),
+      getWorkspaceSummary: async () => ({
+        organization: {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          name: "Test organization",
+          region: "auto",
+          retention_days: 30,
+        },
+        capture: {
+          endpoint_count: 0,
+          consumer_count: 0,
+          sessions_24h: 0,
+          evidence_events_24h: 0,
+        },
+      }),
+      listProgressEvents: async () => [],
     };
 
     const snapshot = await getWorkspaceSnapshot(filters, { client });
@@ -84,28 +80,9 @@ describe("workspace data", () => {
     expect(snapshot.replayReport?.assertion_results).toEqual([assertionResult]);
   });
 
-  it("keeps T3 as exposure only in filtered ledger copy", async () => {
-    const filters = parseFilters(new URLSearchParams("tier=T3"));
-    const snapshot = await getWorkspaceSnapshot(filters, { demoMode: true });
-
-    expect(snapshot.ledgerRows).toHaveLength(1);
-    expect(snapshot.ledgerRows[0]?.tier).toBe("T3");
-    expect(snapshot.ledgerRows[0]?.impact).toContain("Exposure only");
-    expect(snapshot.ledgerRows[0]?.impact).not.toContain("Blocks");
-  });
-
-  it("selects the ledger row named by the entry query even when another row is first", async () => {
-    const filters = parseFilters(new URLSearchParams("entry=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab"));
-    const snapshot = await getWorkspaceSnapshot(filters, { demoMode: true });
-
-    expect(snapshot.selected?.tier).toBe("T2");
-    expect(snapshot.receipt?.digest).toBe("sha256:65cad5e910c891a0");
-  });
-
   it("never falls back to demo rows when the live API is unavailable", async () => {
     const filters = parseFilters(new URLSearchParams());
     const snapshot = await getWorkspaceSnapshot(filters, {
-      demoMode: false,
       client: unavailableClient,
     });
 

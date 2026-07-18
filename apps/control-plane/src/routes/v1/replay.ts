@@ -473,6 +473,7 @@ export const replayRoutes: FastifyPluginAsyncZod = async (app) => {
         runner_version: run.run.runnerVersion,
         policy_id: run.run.policyId,
         policy_version: run.run.policyVersion,
+        runs: run.run.runs,
         outcome: run.decision.outcome,
         decision: {
           outcome: run.decision.outcome,

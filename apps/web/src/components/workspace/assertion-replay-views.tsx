@@ -5,8 +5,6 @@ import { SpecDraftForm } from "@/components/workspace/spec-draft-form";
 import {
   CodeBlock,
   EmptyPanel,
-  LedgerTable,
-  MetricCell,
   PageIntro,
   StatCell,
 } from "@/components/workspace/workspace-primitives";
@@ -24,8 +22,8 @@ export function AssertionsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         title="Assertions"
         desc="Living replay tests with mandatory expiry. Accidents do not become permanent silently."
       />
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <section className="rounded-xl border border-border bg-card p-6">
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+        <section className="glass-panel rounded-2xl p-5 md:p-6">
           <h2 className="font-sans text-sm font-bold">
             {row ? "Assertion for selected behavior" : "Active assertion"}
           </h2>
@@ -65,7 +63,7 @@ export function AssertionsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             </div>
           ) : null}
         </section>
-        <section className="rounded-xl border border-border bg-card">
+        <section className="glass-panel overflow-hidden rounded-2xl">
           <div className="border-b border-border p-4">
             <h2 className="font-sans text-sm font-bold">All assertions</h2>
             <p className="text-[11px] text-muted-foreground">
@@ -87,7 +85,7 @@ export function AssertionsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             ))}
           </div>
         </section>
-        <section className="rounded-xl border border-border bg-card">
+        <section className="glass-panel overflow-hidden rounded-2xl xl:col-span-2">
           <LifecycleItem
             icon={FileText}
             title="Document"
@@ -110,7 +108,6 @@ export function AssertionsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 }
 
 export function ReplayView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
-  const metrics = snapshot.metrics;
   const report = snapshot.replayReport;
   return (
     <>
@@ -118,47 +115,30 @@ export function ReplayView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         title="Replay health & coverage"
         desc="Precision and recall are measured together. A quiet gate that misses dependencies is a failed gate."
       />
-      {!metrics ? (
-        report ? (
-          <section className="rounded-xl border border-border bg-card">
-            <div className="grid grid-cols-2 border-b border-border md:grid-cols-4">
-              <StatCell label="Latest outcome" value={report.decision.outcome.toUpperCase()} />
-              <StatCell
-                label="Deltas"
-                value={String(
-                  report.results.reduce((total, result) => total + result.deltas.length, 0),
-                )}
-              />
-              <StatCell label="Blocking" value={String(report.decision.block_count)} />
-              <StatCell label="Warnings" value={String(report.decision.warn_count)} />
-            </div>
-            <div className="p-4 text-xs text-muted-foreground">
-              Latest signed run: {new Date(report.generated_at).toLocaleString("en-US")} ·{" "}
-              {report.extractor_version}
-            </div>
-            <ReplayDetail report={report} />
-          </section>
-        ) : (
-          <EmptyPanel
-            title="Replay metrics are not available"
-            description="No signed replay run has been ingested for this organization yet."
-          />
-        )
-      ) : (
-        <section className="rounded-xl border border-border bg-card">
-          <div className="grid grid-cols-2 border-b border-border md:grid-cols-4">
-            <MetricCell label="Determinism" value={metrics.stability} />
-            <MetricCell label="T1 precision" value={metrics.precision} />
-            <MetricCell label="T1 recall" value={metrics.recall} warn />
-            <StatCell label="Labeled cases" value={String(metrics.labeledCases)} />
+      {report ? (
+        <section className="glass-panel overflow-hidden rounded-2xl">
+          <div className="surface-grid grid grid-cols-2 border-b md:grid-cols-4">
+            <StatCell label="Latest outcome" value={report.decision.outcome.toUpperCase()} />
+            <StatCell
+              label="Deltas"
+              value={String(
+                report.results.reduce((total, result) => total + result.deltas.length, 0),
+              )}
+            />
+            <StatCell label="Blocking" value={String(report.decision.block_count)} />
+            <StatCell label="Warnings" value={String(report.decision.warn_count)} />
           </div>
-          <LedgerTable rows={snapshot.ledgerRows} compact selectedId={snapshot.selected?.id} />
-          {report ? <ReplayDetail report={report} /> : null}
-          <div className="border-t border-border p-4 text-xs text-muted-foreground">
-            Quarantined diffs warn and cannot block until stable. Metrics exclude quarantined
-            endpoints and say so.
+          <div className="p-5 text-xs text-muted-foreground">
+            Latest signed run: {new Date(report.generated_at).toLocaleString("en-US")} ·{" "}
+            {report.extractor_version}
           </div>
+          <ReplayDetail report={report} />
         </section>
+      ) : (
+        <EmptyPanel
+          title="Replay metrics are not available"
+          description="No signed replay run has been ingested for this organization yet."
+        />
       )}
     </>
   );
@@ -166,7 +146,7 @@ export function ReplayView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
 function ReplayDetail({ report }: { report: NonNullable<WorkspaceSnapshot["replayReport"]> }) {
   return (
-    <div className="border-t border-border p-4">
+    <div className="border-t p-5">
       <h2 className="font-sans text-sm font-bold">Replay provenance</h2>
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-[132px_1fr]">
         <dt className="text-muted-foreground">base image</dt>
@@ -180,7 +160,10 @@ function ReplayDetail({ report }: { report: NonNullable<WorkspaceSnapshot["repla
       </dl>
       <div className="mt-4 grid gap-3">
         {report.results.map((result) => (
-          <div key={result.case_id} className="rounded-lg border border-border bg-industrial-3 p-3">
+          <div
+            key={result.case_id}
+            className="surface-grid rounded-2xl border bg-industrial-3/75 p-4"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <b>{result.case_id}</b>
               <span className="text-muted-foreground">
@@ -194,7 +177,11 @@ function ReplayDetail({ report }: { report: NonNullable<WorkspaceSnapshot["repla
                 label={`${delta.kind} · ${delta.path}`}
                 compact
                 code={JSON.stringify(
-                  { before: delta.before, after: delta.after, matches: delta.matches },
+                  {
+                    before: delta.before,
+                    after: delta.after,
+                    matches: delta.matches,
+                  },
                   null,
                   2,
                 )}
@@ -232,8 +219,8 @@ function LifecycleItem({
   desc: string;
 }) {
   return (
-    <div className="flex gap-3 border-b border-border p-4 last:border-b-0">
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-secondary text-tier-proof">
+    <div className="motion-lift flex gap-3 border-b p-4 last:border-b-0 hover:bg-secondary/45">
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/12 text-primary">
         <Icon className="size-4" aria-hidden="true" />
       </span>
       <div>

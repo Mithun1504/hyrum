@@ -1,3 +1,4 @@
+import { GitCompareArrows, ReceiptText, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,6 @@ import type {
 export function BehaviorView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const row = snapshot.selected;
   if (!row) return <EmptyPanel title="No behavior selected" />;
-  const demoMode = snapshot.dataMode === "demo";
 
   return (
     <>
@@ -22,13 +22,25 @@ export function BehaviorView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
         desc="Redacted receipt sequence and consumer impact. T1 is the only tier that can block."
         actions={<TierBadge tier={row.tier} />}
       />
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <section className="rounded-xl border border-border bg-card p-6">
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_.8fr]">
+        <section className="glass-panel rounded-2xl p-5 md:p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-2xl bg-primary/12 text-primary">
+              <ReceiptText className="size-5" />
+            </span>
+            <div>
+              <h2 className="font-semibold">Evidence sequence</h2>
+              <p className="text-xs text-muted-foreground">Redacted, ordered, and receipt-bound</p>
+            </div>
+          </div>
           <ReceiptEvidence receipt={snapshot.receipt} row={row} />
           <p className="mt-4 text-xs text-muted-foreground">{row.evidence_summary}</p>
         </section>
-        <section className="rounded-xl border border-border bg-card p-6">
-          <h2 className="mb-4 font-sans text-sm font-bold">Impact by consumer</h2>
+        <section className="glass-panel rounded-2xl p-5 md:p-6">
+          <h2 className="mb-1 text-sm font-semibold">Consumer impact</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Only consumers with stored evidence are attributed.
+          </p>
           <div className="divide-y divide-border">
             {snapshot.consumers.map((consumer) => (
               <div
@@ -37,13 +49,9 @@ export function BehaviorView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               >
                 <span>{consumer.display_alias}</span>
                 <span className="text-xs text-muted-foreground">
-                  {demoMode
-                    ? consumer.id === row.consumer_id
-                      ? "8,732 echoes · 4,210 sessions"
-                      : "receives field · no reliance signal"
-                    : consumer.id === row.consumer_id
-                      ? "linked to this ledger entry"
-                      : "no evidence on this behavior"}
+                  {consumer.id === row.consumer_id
+                    ? `${row.observation_count} observations · ${row.session_count} sessions`
+                    : "no stored evidence on this behavior"}
                 </span>
                 <Badge
                   variant={
@@ -92,9 +100,9 @@ function ReceiptEvidence({
 
   return (
     <>
-      <h2 className="mb-4 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+      <h3 className="mb-4 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
         Receipt · {receipt.digest}
-      </h2>
+      </h3>
       {receipt.object_key === null ? (
         <p className="mb-4 border border-tier-pattern/50 bg-tier-pattern/10 px-3 py-2 text-[11px] text-tier-pattern">
           Receipt metadata remains available, but the durable receipt bundle is unavailable.
@@ -128,7 +136,10 @@ function formatExcerpt(excerpt: unknown) {
 
 export function GateView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const report = snapshot.replayReport;
-  const metrics = snapshot.metrics;
+  const stableCases = report?.results.filter((result) => result.stable).length ?? 0;
+  const determinism = report?.results.length
+    ? `${((stableCases / report.results.length) * 100).toFixed(1)}%`
+    : "not reported";
   return (
     <>
       <PageIntro
@@ -159,36 +170,46 @@ export function GateView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           description="No signed replay report has been ingested for this organization yet."
         />
       ) : (
-        <section className="rounded-xl border border-border bg-card">
-          <div className="flex flex-wrap items-center gap-4 border-b border-border p-4">
-            <span className="rounded-lg border border-destructive/50 bg-destructive/20 px-4 py-3 font-sans text-sm font-extrabold uppercase tracking-[0.08em] text-destructive">
-              Gate: {report.decision.outcome}
+        <section className="glass-panel overflow-hidden rounded-2xl">
+          <div className="surface-grid flex flex-wrap items-center gap-4 border-b p-5">
+            <span
+              className={
+                report.decision.outcome === "block"
+                  ? "grid size-14 place-items-center rounded-2xl border border-destructive/45 bg-destructive/15 text-destructive"
+                  : "grid size-14 place-items-center rounded-2xl border border-status-success/45 bg-status-success/15 text-status-success"
+              }
+            >
+              <ShieldAlert className="size-7" />
             </span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">
+                Deterministic decision
+              </p>
+              <p
+                className={
+                  report.decision.outcome === "block"
+                    ? "text-3xl font-semibold uppercase text-destructive"
+                    : "text-3xl font-semibold uppercase text-status-success"
+                }
+              >
+                {report.decision.outcome}
+              </p>
+            </div>
             <p className="text-xs text-muted-foreground">
-              {snapshot.dataMode === "demo" ? (
-                <>
-                  PR <b className="text-foreground">#8427</b> · replay{" "}
-                  <b className="text-foreground">512 sessions</b> in 04:08 ·{" "}
-                </>
-              ) : (
-                <>
-                  generated{" "}
-                  <b className="text-foreground">
-                    {new Date(report.generated_at).toLocaleString("en-US")}
-                  </b>{" "}
-                  · {report.runs === null ? "run count not reported" : `${report.runs} runs`} ·{" "}
-                </>
-              )}
-              determinism{" "}
+              generated{" "}
               <b className="text-foreground">
-                {metrics ? `${(metrics.stability * 100).toFixed(1)}%` : "not reported"}
-              </b>
+                {new Date(report.generated_at).toLocaleString("en-US")}
+              </b>{" "}
+              · {report.runs === null ? "run count not reported" : `${report.runs} runs`} ·
+              determinism <b className="text-foreground">{determinism}</b>
             </p>
-            <OutcomeBadge outcome={report.decision.outcome} />
+            <div className="ml-auto">
+              <OutcomeBadge outcome={report.decision.outcome} />
+            </div>
           </div>
           <div className="divide-y divide-border">
             {report.results.map((result) => (
-              <div key={result.case_id} className="p-4">
+              <div key={result.case_id} className="p-5">
                 {result.deltas.map((delta) => (
                   <GateDeltaRow key={delta.digest} delta={delta} snapshot={snapshot} />
                 ))}
@@ -196,9 +217,8 @@ export function GateView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             ))}
           </div>
           <div className="border-t border-border p-4 text-xs text-muted-foreground">
-            {snapshot.dataMode === "demo"
-              ? "Not flagged: legacy_id is T3 exposure only and shows no behavioral delta in this replay."
-              : `${report.decision.block_count} blocking, ${report.decision.warn_count} warning, and ${report.decision.note_count} informational findings.`}
+            {report.decision.block_count} blocking, {report.decision.warn_count} warning, and{" "}
+            {report.decision.note_count} informational findings.
           </div>
         </section>
       )}
@@ -215,7 +235,7 @@ function GateDeltaRow({ delta, snapshot }: { delta: ReplayDelta; snapshot: Works
   const matchedImpact = matchedRow?.impact ?? null;
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4 rounded-2xl border bg-card/55 p-4">
       <div className="flex flex-wrap items-center gap-3">
         {tier ? (
           <TierBadge tier={tier} compact />
@@ -224,7 +244,7 @@ function GateDeltaRow({ delta, snapshot }: { delta: ReplayDelta; snapshot: Works
             NOTE
           </Badge>
         )}
-        <span>
+        <span className="font-semibold">
           {delta.path} · {delta.kind} delta
         </span>
         <Badge
@@ -234,8 +254,9 @@ function GateDeltaRow({ delta, snapshot }: { delta: ReplayDelta; snapshot: Works
           {gateDecisionLabel(tier)}
         </Badge>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
         <CodeBlock label="base" code={JSON.stringify(delta.before)} compact />
+        <GitCompareArrows className="mx-auto size-5 text-primary" aria-label="compared with" />
         <CodeBlock label="candidate" code={JSON.stringify(delta.after)} compact />
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

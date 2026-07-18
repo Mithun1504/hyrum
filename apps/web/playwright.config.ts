@@ -1,8 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
 
-process.env.HYRUM_E2E_AUTH_BYPASS ??= "1";
-process.env.HYRUM_DEMO_DATA ??= "1";
-
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -14,8 +11,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command:
-      "NEXT_DIST_DIR=.next-e2e HYRUM_E2E_AUTH_BYPASS=1 HYRUM_DEMO_DATA=1 pnpm exec next dev --port 3017",
+    command: "NEXT_DIST_DIR=.next-e2e pnpm exec next dev --port 3017",
     url: "http://127.0.0.1:3017/api/health",
     reuseExistingServer: !process.env.CI,
   },

@@ -1,14 +1,18 @@
 import { consumerSchema, ledgerEntrySchema, receiptSchema } from "@hyrum/contracts";
 import {
   and,
+  assertions,
   behaviorDefinitions,
+  behaviorObservations,
   consumers,
   type Database,
   desc,
   eq,
   ledgerEntries,
+  operations,
   receiptIsUnexpired,
   receipts,
+  sql,
   type TenantDb,
   withTenant,
 } from "@hyrum/db";
@@ -19,15 +23,31 @@ import { asIso, nullableIso, requireContext } from "./helpers";
 const ledgerListSchema = z.object({ entries: z.array(ledgerEntrySchema) });
 const consumerListSchema = z.object({ consumers: z.array(consumerSchema) });
 
-function ledgerSelect(db: Database | TenantDb, organizationId: string) {
+function ledgerSelect(db: Database | TenantDb, organizationId: string, entryId?: string) {
   return db
     .select({
       entry: ledgerEntries,
       kind: behaviorDefinitions.kind,
+      endpoint: sql<string>`coalesce(${operations.method} || ' ' || ${operations.pathTemplate}, 'Unscoped operation')`,
+      consumerAlias: consumers.displayAlias,
+      consumerStableId: consumers.stableId,
+      observationCount: sql<number>`coalesce((select sum(${behaviorObservations.count}) from ${behaviorObservations} where ${behaviorObservations.organizationId} = ${organizationId} and ${behaviorObservations.behaviorId} = ${ledgerEntries.behaviorId} and ${behaviorObservations.consumerId} = ${ledgerEntries.consumerId}), 0)::int`,
+      sessionCount: sql<number>`coalesce((select count(distinct ${behaviorObservations.captureSessionId}) from ${behaviorObservations} where ${behaviorObservations.organizationId} = ${organizationId} and ${behaviorObservations.behaviorId} = ${ledgerEntries.behaviorId} and ${behaviorObservations.consumerId} = ${ledgerEntries.consumerId}), 0)::int`,
+      owner: sql<
+        string | null
+      >`(select ${assertions.ownerId} from ${assertions} where ${assertions.organizationId} = ${organizationId} and ${assertions.behaviorId} = ${ledgerEntries.behaviorId} and ${assertions.status} = 'active' and ${assertions.expiresAt} > now() order by ${assertions.createdAt} desc limit 1)`,
+      receiptDigest: receipts.digest,
     })
     .from(ledgerEntries)
     .innerJoin(behaviorDefinitions, eq(behaviorDefinitions.id, ledgerEntries.behaviorId))
-    .where(eq(ledgerEntries.organizationId, organizationId))
+    .innerJoin(consumers, eq(consumers.id, ledgerEntries.consumerId))
+    .leftJoin(operations, eq(operations.id, ledgerEntries.operationId))
+    .leftJoin(receipts, eq(receipts.id, ledgerEntries.receiptId))
+    .where(
+      entryId
+        ? and(eq(ledgerEntries.organizationId, organizationId), eq(ledgerEntries.id, entryId))
+        : eq(ledgerEntries.organizationId, organizationId),
+    )
     .orderBy(desc(ledgerEntries.lastSeenAt))
     .limit(100);
 }
@@ -46,6 +66,13 @@ function serializeLedger(row: Awaited<ReturnType<typeof ledgerSelect>>[number]) 
     last_seen_at: asIso(row.entry.lastSeenAt),
     freshness_until: asIso(row.entry.freshnessUntil),
     receipt_id: row.entry.receiptId,
+    endpoint: row.endpoint,
+    consumer_alias: row.consumerAlias,
+    consumer_stable_id: row.consumerStableId,
+    observation_count: row.observationCount,
+    session_count: row.sessionCount,
+    owner: row.owner,
+    receipt_digest: row.receiptDigest,
   };
 }
 
@@ -82,21 +109,12 @@ export const ledgerRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) => {
       const context = requireContext(app, request.authContext);
-      const [row] = await withTenant(app.database.db, context.organizationId, (tx) =>
-        tx
-          .select({ entry: ledgerEntries, kind: behaviorDefinitions.kind })
-          .from(ledgerEntries)
-          .innerJoin(behaviorDefinitions, eq(behaviorDefinitions.id, ledgerEntries.behaviorId))
-          .where(
-            and(
-              eq(ledgerEntries.organizationId, context.organizationId),
-              eq(ledgerEntries.id, request.params.id),
-            ),
-          )
-          .limit(1),
+      const detail = await withTenant(app.database.db, context.organizationId, (tx) =>
+        ledgerSelect(tx, context.organizationId, request.params.id),
       );
-      if (!row) throw app.httpErrors.notFound();
-      return serializeLedger(row);
+      const selected = detail.find((item) => item.entry.id === request.params.id);
+      if (!selected) throw app.httpErrors.notFound();
+      return serializeLedger(selected);
     },
   );
 

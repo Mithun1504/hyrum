@@ -9,6 +9,7 @@ import { progressRoutes } from "./progress";
 import { replayRoutes } from "./replay";
 import { specDraftRoutes } from "./spec-drafts";
 import { specRoutes } from "./specs";
+import { workspaceRoutes } from "./workspace";
 
 export const v1Routes: FastifyPluginAsyncZod = async (app) => {
   app.get(
@@ -50,4 +51,5 @@ export const v1Routes: FastifyPluginAsyncZod = async (app) => {
   await app.register(specRoutes);
   await app.register(specDraftRoutes);
   await app.register(progressRoutes);
+  await app.register(workspaceRoutes);
 };

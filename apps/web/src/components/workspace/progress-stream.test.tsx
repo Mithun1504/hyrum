@@ -1,6 +1,8 @@
 import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProgressStream } from "./progress-stream";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const NativeEventSource = globalThis.EventSource;
 
@@ -27,7 +29,7 @@ describe("ProgressStream", () => {
     render(<ProgressStream initialEvents={[]} live />);
 
     const source = MockEventSource.instances[0];
-    expect(source?.url).toBe("/api/progress");
+    expect(source?.url).toBe("/api/progress?last_event_id=0");
     act(() => {
       source?.dispatchEvent(
         new MessageEvent("capture.batch_ingested", {

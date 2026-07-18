@@ -7,19 +7,19 @@ const tierCopy = {
   T1: {
     label: "T1 blocks",
     detail: "echo evidence",
-    className: "border-tier-proof/40 bg-tier-proof/15 text-tier-proof",
+    className: "border-tier-proof/40 bg-tier-proof/12 text-tier-proof",
     icon: Ban,
   },
   T2: {
     label: "T2 warns",
     detail: "pattern evidence",
-    className: "border-tier-pattern/40 bg-tier-pattern/15 text-tier-pattern",
+    className: "border-tier-pattern/40 bg-tier-pattern/12 text-tier-pattern",
     icon: AlertTriangle,
   },
   T3: {
     label: "T3 exposure",
     detail: "never dependency",
-    className: "border-tier-exposure/40 bg-tier-exposure/15 text-tier-exposure",
+    className: "border-tier-exposure/40 bg-tier-exposure/12 text-tier-exposure",
     icon: Eye,
   },
 } satisfies Record<
@@ -32,7 +32,10 @@ export function TierBadge({ tier, compact = false }: { tier: EvidenceTier; compa
   const Icon = copy.icon;
 
   return (
-    <Badge variant="outline" className={cn("gap-1 border", copy.className)}>
+    <Badge
+      variant="outline"
+      className={cn("gap-1 rounded-lg border font-semibold", copy.className)}
+    >
       <Icon aria-hidden="true" />
       <span>{compact ? tier : copy.label}</span>
     </Badge>
@@ -48,7 +51,7 @@ export function TierLegend() {
         return (
           <div
             key={tier}
-            className={cn("rounded-lg border p-3 text-sm ring-1 ring-foreground/5", copy.className)}
+            className={cn("glass-panel motion-lift rounded-2xl border p-4 text-sm", copy.className)}
           >
             <div className="flex items-center gap-2 font-medium">
               <Icon className="size-4" aria-hidden="true" />

@@ -5,11 +5,10 @@ const workosConfigured =
   Boolean(process.env.WORKOS_API_KEY) &&
   Boolean(process.env.WORKOS_COOKIE_PASSWORD) &&
   Boolean(process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI);
-const localAuthBypass = process.env.HYRUM_E2E_AUTH_BYPASS === "1";
 
 test.describe("workspace", () => {
   test.skip(
-    !workosConfigured && !localAuthBypass,
+    !workosConfigured,
     "WorkOS test auth is not configured for authenticated workspace E2E.",
   );
 
@@ -17,16 +16,16 @@ test.describe("workspace", () => {
     await page.goto("/app");
     await expect(page.getByRole("heading", { name: "Capture" })).toBeVisible();
 
-    await page.getByRole("link", { name: /Behavior detail/i }).click();
-    await expect(page.getByText("sha256:3b78f02f0f78c91f")).toBeVisible();
+    await page.getByRole("link", { name: /^Behavior$/i }).click();
+    await expect(page.getByText(`sha256:${"6".repeat(64)}`)).toBeVisible();
     await expect(page.getByText(/T3 exposure/i)).toBeVisible();
 
     await page.getByRole("link", { name: /Change gate/i }).click();
-    await expect(page.getByText(/Gate: block/i)).toBeVisible();
-    await expect(page.getByText(/T3 exposure only/i)).toBeVisible();
+    await expect(page.getByText("BLOCK", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/informational findings/i)).toBeVisible();
 
     await page.getByRole("link", { name: "Inspect receipt" }).click();
-    await expect(page.getByText("sha256:3b78f02f0f78c91f")).toBeVisible();
+    await expect(page.getByText(`sha256:${"6".repeat(64)}`)).toBeVisible();
 
     await page.getByRole("link", { name: /Change gate/i }).click();
     await page.getByRole("link", { name: "Full replay report" }).click();
@@ -44,36 +43,32 @@ test.describe("workspace", () => {
     page,
   }) => {
     await page.goto("/app?view=ledger");
-    await page.getByRole("link", { name: /POST \/v1\/orders/i }).click();
+    await page.getByRole("link", { name: /Stable validation error ordering/i }).click();
 
-    await expect(page).toHaveURL(/entry=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab/);
-    await expect(page.getByRole("heading", { name: /422 template text/i })).toBeVisible();
-    await expect(page.getByText("sha256:65cad5e910c891a0")).toBeVisible();
-    await expect(page.getByText(/consumer retries lookup path/i)).toBeVisible();
+    await expect(page).toHaveURL(/entry=90000000-0000-4000-8000-000000000002/);
+    await expect(
+      page.getByRole("heading", { name: /Stable validation error ordering/i }),
+    ).toBeVisible();
+    await expect(page.getByText(`sha256:${"7".repeat(64)}`)).toBeVisible();
+    await expect(page.getByText(/11 observations/i)).toBeVisible();
 
     await page.getByRole("link", { name: /Change gate/i }).click();
     await page.getByRole("link", { name: "Open matched evidence" }).nth(1).click();
 
-    await expect(page).toHaveURL(/entry=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab/);
-    await expect(page.getByText("sha256:65cad5e910c891a0")).toBeVisible();
+    await expect(page).toHaveURL(/entry=90000000-0000-4000-8000-000000000002/);
+    await expect(page.getByText(`sha256:${"7".repeat(64)}`)).toBeVisible();
   });
 
   test("validates the assertion and OpenAPI draft lifecycle", async ({ page }) => {
     await page.goto("/app?view=assertions");
     await expect(page.getByRole("heading", { name: "Assertions", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Draft OpenAPI change" }).click();
-    await expect(page.getByText("Demo spec draft generated")).toBeVisible();
-    await expect(page.getByText("Advisory model uncertainty: 18%")).toBeVisible();
-    await expect(page.getByText(/x-hyrum-assertion/)).toBeVisible();
-    await expect(page.getByLabel("Spec draft citations")).toContainText("receipt");
-
     const pinButton = page.getByRole("button", { name: "Pin assertion" });
     await expect(pinButton).toBeDisabled();
     await page.getByLabel("Reason").fill("Protect the support importer migration window.");
     await expect(pinButton).toBeEnabled();
     await pinButton.click();
-    await expect(page.getByText("Demo assertion validated")).toBeVisible();
+    await expect(page.getByText(/pinned and added to replay enforcement/i)).toBeVisible();
   });
 
   test("renders workspace content after a mobile reload before opening navigation", async ({
@@ -86,6 +81,6 @@ test.describe("workspace", () => {
     await expect(page.getByRole("heading", { name: "Capture" })).toBeVisible();
     await expect(page.getByRole("main").getByText("Gateway", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Close navigation overlay" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Close navigation" })).toHaveCount(0);
   });
 });

@@ -17,7 +17,3 @@ export function createControlPlane(accessToken?: string) {
       }),
   });
 }
-
-export function isDemoDataEnabled() {
-  return process.env.HYRUM_DEMO_DATA === "1" && process.env.NODE_ENV !== "production";
-}
