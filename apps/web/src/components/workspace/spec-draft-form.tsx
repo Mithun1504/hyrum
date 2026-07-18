@@ -32,37 +32,86 @@ export function SpecDraftForm({
           }
           role="status"
         >
-          <b>{state.title}</b>
-          {state.summary ? <p className="text-muted-foreground">{state.summary}</p> : null}
-          {typeof state.uncertainty === "number" ? (
-            <p className="text-[11px] text-muted-foreground">
-              Advisory model uncertainty: {Math.round(state.uncertainty * 100)}%
-            </p>
-          ) : null}
-          {state.patch ? (
-            <pre className="max-h-64 overflow-auto rounded-lg border border-input bg-industrial-3 p-3 text-[11px] leading-6 text-foreground">
-              <code>{state.patch}</code>
-            </pre>
-          ) : null}
-          {state.citations?.length ? (
-            <ul className="flex flex-wrap gap-2" aria-label="Spec draft citations">
-              {state.citations.map((citation) => {
-                const type = citation.resource_type ?? citation.resourceType ?? "evidence";
-                const id = citation.resource_id ?? citation.resourceId ?? "unknown";
-                return (
-                  <li
-                    key={`${type}:${id}`}
-                    className="rounded-md border border-border px-2 py-1 text-[10px] text-muted-foreground"
-                  >
-                    {type.replaceAll("_", " ")} · {id.slice(0, 18)}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
+          {state.draft ? <SpecDraftResult state={state} /> : null}
           <p>{state.message}</p>
         </div>
       ) : null}
     </form>
+  );
+}
+
+function SpecDraftResult({ state }: { state: SpecDraftState }) {
+  const draft = state.draft;
+  if (!draft) return null;
+
+  return (
+    <div className="grid gap-4 text-foreground">
+      <div>
+        <h3 className="text-sm font-semibold">{draft.title}</h3>
+        <p className="mt-1 leading-5 text-muted-foreground">
+          {draft.abstained
+            ? (draft.abstentionReason ?? "The draft abstained because evidence was insufficient.")
+            : draft.summary}
+        </p>
+      </div>
+      <div>
+        <h4 className="text-xs font-medium text-muted-foreground">Rationale</h4>
+        <p className="mt-1 leading-5">{draft.rationale}</p>
+      </div>
+      {draft.openapiPatch.length > 0 ? (
+        <div className="overflow-hidden rounded-[4px] border">
+          <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+            Proposed OpenAPI operations
+          </div>
+          <div className="divide-y divide-border">
+            {draft.openapiPatch.map((operation) => (
+              <div
+                key={`${operation.op}:${operation.path}`}
+                className="grid gap-1 px-3 py-3 sm:grid-cols-[4rem_minmax(0,1fr)]"
+              >
+                <code className="text-[11px] text-tier-exposure">{operation.op}</code>
+                <div className="min-w-0">
+                  <code className="break-all text-[11px]">{operation.path}</code>
+                  <p className="mt-1 text-muted-foreground">
+                    {operation.value.type}
+                    {operation.value.format ? ` · ${operation.value.format}` : ""}
+                    {operation.value.description ? ` · ${operation.value.description}` : ""}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <dl className="grid gap-2 border-t pt-3 text-[11px] text-muted-foreground sm:grid-cols-2">
+        <DraftFact label="evidence receipts" value={draft.receiptIds.join(", ")} mono />
+        <DraftFact label="uncertainty" value={`${Math.round(draft.uncertainty * 100)}%`} />
+        <DraftFact label="source" value={state.source ?? "not reported"} />
+        <DraftFact label="model" value={state.model ?? "not reported"} mono />
+        <DraftFact label="prompt" value={state.promptVersion ?? "not reported"} mono />
+        <DraftFact label="response" value={state.responseId ?? "fallback"} mono />
+      </dl>
+    </div>
+  );
+}
+
+function DraftFact({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt>{label}</dt>
+      <dd
+        className={mono ? "mt-0.5 break-all font-mono text-foreground" : "mt-0.5 text-foreground"}
+      >
+        {value}
+      </dd>
+    </div>
   );
 }

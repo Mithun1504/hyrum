@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { ControlPlaneError } from "@hyrum/api-client";
+import { describe, expect, it, vi } from "vitest";
 import { getWorkspaceSnapshot, parseFilters } from "./workspace-data";
 
 const unavailableClient = {
@@ -17,6 +18,7 @@ const unavailableClient = {
 describe("workspace data", () => {
   it("keeps live replay assertion results from the control plane", async () => {
     const filters = parseFilters(new URLSearchParams());
+    const matchedClaimId = "66666666-6666-4666-8666-666666666666";
     const assertionResult = {
       assertion_id: "99999999-9999-4999-8999-999999999999",
       behavior_id: "cccccccc-cccc-4ccc-8ccc-ccccccccccca",
@@ -46,8 +48,14 @@ describe("workspace data", () => {
         base_image_digest: `sha256:${"a".repeat(64)}`,
         candidate_image_digest: `sha256:${"b".repeat(64)}`,
         extractor_version: "extractors-go-0.4.1",
-        corpus_digest: "sha256:fixture-50k",
+        corpus_digest: `sha256:${"c".repeat(64)}`,
+        fixture_digest: `sha256:${"d".repeat(64)}`,
+        mask_digest: `sha256:${"e".repeat(64)}`,
+        runner_version: "hyrum-replay-0.4.1",
+        policy_id: "88888888-8888-4888-8888-888888888888",
+        policy_version: 3,
         runs: 3,
+        outcome: "pass" as const,
         decision: {
           outcome: "pass" as const,
           block_count: 0,
@@ -55,7 +63,19 @@ describe("workspace data", () => {
           note_count: 0,
           reasons: [],
         },
-        deltas: [],
+        deltas: [
+          {
+            case_id: "live-replay-case",
+            kind: "shape" as const,
+            path: "$.request_id",
+            before: { present: true },
+            after: { present: false },
+            digest: `sha256:${"f".repeat(64)}`,
+            stable: true,
+            quarantined: false,
+            matches: [{ claim_id: matchedClaimId }],
+          },
+        ],
         assertion_results: [assertionResult],
       }),
       getWorkspaceSummary: async () => ({
@@ -78,6 +98,49 @@ describe("workspace data", () => {
     const snapshot = await getWorkspaceSnapshot(filters, { client });
 
     expect(snapshot.replayReport?.assertion_results).toEqual([assertionResult]);
+    expect(snapshot.replayReport?.results[0]?.deltas[0]?.matches).toEqual([
+      { claim_id: matchedClaimId, tier: null },
+    ]);
+  });
+
+  it("loads an explicitly linked replay run instead of the latest run", async () => {
+    const replayRunId = "77777777-7777-4777-8777-777777777777";
+    const getReplayRun = vi.fn(async () => Promise.reject(new Error("linked replay unavailable")));
+    const snapshot = await getWorkspaceSnapshot(parseFilters(new URLSearchParams()), {
+      client: { ...unavailableClient, getReplayRun },
+      replayRunId,
+    });
+
+    expect(getReplayRun).toHaveBeenCalledWith(replayRunId);
+    expect(snapshot.dataErrors).toContain("Replay: linked replay unavailable");
+  });
+
+  it("surfaces a missing explicitly linked replay without treating an empty latest run as an error", async () => {
+    const notFound = new ControlPlaneError({
+      type: "about:blank",
+      title: "Replay run not found",
+      status: 404,
+      error: "Replay run not found",
+      code: "not_found",
+    });
+    const explicitSnapshot = await getWorkspaceSnapshot(parseFilters(new URLSearchParams()), {
+      client: {
+        ...unavailableClient,
+        getReplayRun: async () => Promise.reject(notFound),
+      },
+      replayRunId: "77777777-7777-4777-8777-777777777777",
+    });
+    const latestSnapshot = await getWorkspaceSnapshot(parseFilters(new URLSearchParams()), {
+      client: {
+        ...unavailableClient,
+        getLatestReplayRun: async () => Promise.reject(notFound),
+      },
+    });
+
+    expect(explicitSnapshot.dataErrors).toContain(
+      "Replay: Linked replay run was not found or is unavailable to this organization.",
+    );
+    expect(latestSnapshot.dataErrors.some((error) => error.startsWith("Replay:"))).toBe(false);
   });
 
   it("never falls back to demo rows when the live API is unavailable", async () => {

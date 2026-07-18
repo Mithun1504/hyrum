@@ -1,7 +1,6 @@
 "use client";
 
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
-import { LogOut } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +24,6 @@ export function AccountControls({ label }: { label: string }) {
           await signOut();
         }}
       >
-        <LogOut aria-hidden="true" />
         {pending ? "Signing out…" : "Sign out"}
       </Button>
     </div>

@@ -1,5 +1,6 @@
 "use server";
 
+import { type SpecDraft, specDraftResponseSchema } from "@hyrum/contracts";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -12,46 +13,17 @@ const assertionInputSchema = z.object({
   expires_at: z.string().date(),
 });
 
-const specDraftResponseSchema = z.object({
-  source: z.enum(["model", "fallback"]),
-  draft: z
-    .object({
-      title: z.string(),
-      summary: z.string(),
-      patch: z.string().optional(),
-      citations: z
-        .array(
-          z.object({
-            resource_type: z.string().optional(),
-            resource_id: z.string().optional(),
-            resourceType: z.string().optional(),
-            resourceId: z.string().optional(),
-          }),
-        )
-        .optional(),
-      uncertainty: z.number().min(0).max(1).optional(),
-      abstained: z.boolean(),
-      abstentionReason: z.string().nullable(),
-    })
-    .passthrough(),
-});
-
 export type MutationState = {
   status: "idle" | "success" | "error";
   message: string;
 };
 
 export type SpecDraftState = MutationState & {
-  title?: string;
-  summary?: string;
-  patch?: string;
-  citations?: Array<{
-    resource_type?: string;
-    resource_id?: string;
-    resourceType?: string;
-    resourceId?: string;
-  }>;
-  uncertainty?: number;
+  source?: "model" | "fallback";
+  responseId?: string | null;
+  model?: string;
+  promptVersion?: string;
+  draft?: SpecDraft;
 };
 
 export async function pinAssertionAction(
@@ -71,7 +43,10 @@ export async function pinAssertionAction(
     };
   }
   try {
-    const { accessToken } = await withAuth({ ensureSignedIn: true });
+    const { accessToken } = await withAuth();
+    if (!accessToken) {
+      return { status: "error", message: "Your session expired. Sign in again before pinning." };
+    }
     const assertion = await createControlPlane(accessToken).pinAssertion({
       behavior_id: parsed.data.behavior_id,
       claim_id: parsed.data.claim_id,
@@ -95,7 +70,13 @@ export async function draftSpecAction(
   const assertionId = z.string().uuid().safeParse(formData.get("assertion_id"));
   if (!assertionId.success) return { status: "error", message: "Select a valid assertion first." };
   try {
-    const { accessToken } = await withAuth({ ensureSignedIn: true });
+    const { accessToken } = await withAuth();
+    if (!accessToken) {
+      return {
+        status: "error",
+        message: "Your session expired. Sign in again before drafting a spec change.",
+      };
+    }
     const response = await fetch(
       `${controlPlaneBaseUrl}/v1/assertions/${assertionId.data}/spec-draft`,
       {
@@ -110,14 +91,11 @@ export async function draftSpecAction(
     return {
       status: "success",
       message: `Spec draft generated from ${result.source} evidence processing.`,
-      title: result.draft.title,
-      summary: result.draft.abstained
-        ? (result.draft.abstentionReason ??
-          "The draft abstained because evidence was insufficient.")
-        : result.draft.summary,
-      patch: result.draft.patch,
-      citations: result.draft.citations,
-      uncertainty: result.draft.uncertainty,
+      source: result.source,
+      responseId: result.response_id,
+      model: result.model,
+      promptVersion: result.prompt_version,
+      draft: result.draft,
     };
   } catch (error) {
     return { status: "error", message: actionError("Spec draft could not be generated", error) };

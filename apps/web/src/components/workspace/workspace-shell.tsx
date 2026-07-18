@@ -1,12 +1,12 @@
-import { CircleDot, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { AssertionsView, ReplayView } from "@/components/workspace/assertion-replay-views";
 import { BehaviorView, GateView } from "@/components/workspace/behavior-gate-views";
 import { CaptureView, LedgerView } from "@/components/workspace/capture-ledger-views";
 import { ConsumersView, EndpointsView, PolicyView } from "@/components/workspace/coverage-views";
-import { ThemeToggle } from "@/components/workspace/theme-toggle";
+import { OverviewView } from "@/components/workspace/overview-view";
 import { WorkspaceNavigation } from "@/components/workspace/workspace-navigation";
 import {
+  contextualWorkspaceViews,
+  isWorkspaceViewKey,
   type ViewKey,
   workspaceNavItems,
 } from "@/components/workspace/workspace-navigation-config";
@@ -23,7 +23,8 @@ export function WorkspaceShell({
   view: ViewKey;
   actorLabel: string;
 }) {
-  const title = workspaceNavItems.find((item) => item.key === view)?.label ?? "Capture";
+  const title = workspaceNavItems.find((item) => item.key === view)?.label ?? "Overview";
+  const contextualTitle = contextualWorkspaceViews.find((item) => item.key === view)?.label;
   const blockingCount = snapshot.replayReport?.decision.block_count ?? 0;
   const selectedParam = snapshot.selected
     ? `&entry=${encodeURIComponent(snapshot.selected.id)}`
@@ -33,7 +34,7 @@ export function WorkspaceShell({
     <div className="flex min-h-dvh min-w-0 bg-background text-foreground">
       <a
         href="#workspace-main"
-        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-3 focus:text-primary-foreground"
       >
         Skip to workspace
       </a>
@@ -43,50 +44,41 @@ export function WorkspaceShell({
         role={snapshot.role}
         organizationName={snapshot.summary?.organization.name ?? "Organization unavailable"}
         blockingCount={blockingCount}
+        apiStatus={snapshot.apiStatus}
         selectedParam={selectedParam}
       />
       <main id="workspace-main" className="min-w-0 flex-1 pb-24 md:pb-0" tabIndex={-1}>
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/78 px-4 pl-16 backdrop-blur-xl md:h-16 md:px-6 xl:px-8">
+        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-4 border-b bg-background/95 px-4 pl-16 md:px-6 xl:px-8">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{title}</p>
-            <p className="hidden text-[10px] text-muted-foreground sm:block">
-              Live, tenant-scoped evidence
+            <p className="truncate text-sm font-semibold">{contextualTitle ?? title}</p>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              Tenant-scoped receipts, replay, and policy
             </p>
           </div>
-          <a
-            href="/app?view=ledger"
-            className="ml-auto hidden h-10 w-[min(34vw,360px)] items-center gap-2 rounded-xl border bg-card/70 px-3 text-left text-xs text-muted-foreground shadow-sm lg:flex"
-            aria-label="Open ledger search"
-          >
-            <Search className="size-4" aria-hidden="true" />
-            Search endpoints, consumers, behaviors…
-            <kbd className="ml-auto rounded-md border bg-secondary px-1.5 py-0.5 text-[9px]">
-              ⌘K
-            </kbd>
-          </a>
-          <Badge
-            variant="outline"
+          <div
             className={cn(
-              "gap-2 rounded-full bg-card/70 px-3",
-              snapshot.apiStatus === "unavailable"
-                ? "border-destructive/45 text-destructive"
-                : "border-status-success/40 text-status-success",
+              "ml-auto rounded-md border px-3 py-1.5 text-xs",
+              snapshot.apiStatus === "ok" &&
+                "border-status-success/35 bg-status-success/10 text-status-success",
+              snapshot.apiStatus === "degraded" &&
+                "border-status-warning/40 bg-status-warning/10 text-status-warning",
+              snapshot.apiStatus === "unavailable" &&
+                "border-destructive/45 bg-destructive/10 text-destructive",
             )}
           >
-            <CircleDot
-              className={cn("size-3", snapshot.apiStatus === "ok" && "live-pulse rounded-full")}
-              aria-hidden="true"
-            />
             <span className="hidden sm:inline">
-              {snapshot.apiStatus === "ok" ? "Live" : snapshot.apiStatus}
+              Control plane: {snapshot.apiStatus === "ok" ? "live" : snapshot.apiStatus}
             </span>
-          </Badge>
-          <ThemeToggle compact />
+            <span className="sm:hidden">
+              {snapshot.apiStatus === "ok" ? "live" : snapshot.apiStatus}
+            </span>
+          </div>
         </header>
-        <div className="mx-auto w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
+        <div className="mx-auto w-full max-w-[1600px] px-4 py-4 md:px-6 md:py-6 xl:px-8">
           {snapshot.dataErrors.length > 0 ? (
             <DataStatusBanner errors={snapshot.dataErrors} />
           ) : null}
+          {view === "overview" ? <OverviewView snapshot={snapshot} /> : null}
           {view === "capture" ? <CaptureView snapshot={snapshot} /> : null}
           {view === "ledger" ? <LedgerView snapshot={snapshot} /> : null}
           {view === "consumers" ? <ConsumersView snapshot={snapshot} /> : null}
@@ -103,5 +95,5 @@ export function WorkspaceShell({
 }
 
 export function normalizeView(value: string | undefined): ViewKey {
-  return workspaceNavItems.some((item) => item.key === value) ? (value as ViewKey) : "capture";
+  return isWorkspaceViewKey(value) ? value : "overview";
 }

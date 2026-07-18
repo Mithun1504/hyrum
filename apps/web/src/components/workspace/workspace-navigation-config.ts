@@ -1,16 +1,5 @@
-import {
-  Activity,
-  AlertOctagon,
-  Boxes,
-  ListFilter,
-  Network,
-  Pin,
-  RadioTower,
-  ShieldCheck,
-  Workflow,
-} from "lucide-react";
-
 export type ViewKey =
+  | "overview"
   | "capture"
   | "ledger"
   | "consumers"
@@ -22,43 +11,70 @@ export type ViewKey =
   | "policy";
 
 export const workspaceNavItems = [
-  { key: "capture", label: "Capture", shortLabel: "Capture", icon: RadioTower, group: "Discover" },
-  { key: "ledger", label: "Ledger", shortLabel: "Ledger", icon: ListFilter, group: "Discover" },
-  { key: "behavior", label: "Behavior", shortLabel: "Behavior", icon: Workflow, group: "Discover" },
-  {
-    key: "consumers",
-    label: "Consumers",
-    shortLabel: "Consumers",
-    icon: Network,
-    group: "Discover",
-  },
-  { key: "endpoints", label: "Endpoints", shortLabel: "Endpoints", icon: Boxes, group: "Discover" },
+  { key: "overview", label: "Overview", shortLabel: "Overview", group: "Start", step: "00" },
+  { key: "capture", label: "Capture", shortLabel: "Capture", group: "Workflow", step: "01" },
+  { key: "ledger", label: "Ledger", shortLabel: "Ledger", group: "Workflow", step: "02" },
   {
     key: "gate",
     label: "Change gate",
     shortLabel: "Gate",
-    icon: AlertOctagon,
-    group: "Change control",
+    group: "Workflow",
+    step: "03",
   },
   {
     key: "assertions",
     label: "Assertions",
     shortLabel: "Assertions",
-    icon: Pin,
-    group: "Change control",
+    group: "Workflow",
+    step: "04",
+  },
+  {
+    key: "consumers",
+    label: "Consumers",
+    shortLabel: "Consumers",
+    group: "Investigate",
+    step: "A",
+  },
+  {
+    key: "endpoints",
+    label: "Endpoints",
+    shortLabel: "Endpoints",
+    group: "Investigate",
+    step: "B",
   },
   {
     key: "replay",
-    label: "Replay health",
+    label: "Replay integrity",
     shortLabel: "Replay",
-    icon: Activity,
-    group: "Change control",
+    group: "System",
+    step: "R",
   },
-  { key: "policy", label: "Policy", shortLabel: "Policy", icon: ShieldCheck, group: "Settings" },
+  { key: "policy", label: "Policy", shortLabel: "Policy", group: "System", step: "P" },
 ] satisfies Array<{
-  key: ViewKey;
+  key: Exclude<ViewKey, "behavior">;
   label: string;
   shortLabel: string;
-  icon: typeof Activity;
   group: string;
+  step: string;
 }>;
+
+export const contextualWorkspaceViews = [
+  { key: "behavior", label: "Behavior evidence" },
+] satisfies Array<{
+  key: Extract<ViewKey, "behavior">;
+  label: string;
+}>;
+
+export const mobilePrimaryNavKeys = [
+  "overview",
+  "ledger",
+  "gate",
+  "assertions",
+] satisfies ViewKey[];
+
+export function isWorkspaceViewKey(value: string | undefined): value is ViewKey {
+  return (
+    workspaceNavItems.some((item) => item.key === value) ||
+    contextualWorkspaceViews.some((item) => item.key === value)
+  );
+}

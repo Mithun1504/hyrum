@@ -33,7 +33,10 @@ describe("ProgressStream", () => {
     act(() => {
       source?.dispatchEvent(
         new MessageEvent("capture.batch_ingested", {
-          data: JSON.stringify({ accepted: 12 }),
+          data: JSON.stringify({
+            resource_id: "batch-42",
+            created_at: "2026-07-18T12:00:00.000Z",
+          }),
           lastEventId: "42",
         }),
       );

@@ -92,7 +92,10 @@ export async function authorizeReplayIntegrations(
 }
 
 export function replayDetailsUrl(webUrl: string, replayRunId: string) {
-  return new URL(`/app/replay/${replayRunId}`, webUrl).toString();
+  const url = new URL("/app", webUrl);
+  url.searchParams.set("view", "replay");
+  url.searchParams.set("run", replayRunId);
+  return url.toString();
 }
 
 export const replayRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -452,12 +455,22 @@ export const replayRoutes: FastifyPluginAsyncZod = async (app) => {
       const deltas = await tx
         .select()
         .from(replayDeltas)
-        .where(eq(replayDeltas.replayRunId, run.run.id))
+        .where(
+          and(
+            eq(replayDeltas.organizationId, organizationId),
+            eq(replayDeltas.replayRunId, run.run.id),
+          ),
+        )
         .orderBy(desc(replayDeltas.createdAt));
       const assertionResults = await tx
         .select()
         .from(replayAssertionResults)
-        .where(eq(replayAssertionResults.replayRunId, run.run.id))
+        .where(
+          and(
+            eq(replayAssertionResults.organizationId, organizationId),
+            eq(replayAssertionResults.replayRunId, run.run.id),
+          ),
+        )
         .orderBy(desc(replayAssertionResults.createdAt));
       return replayRunDetailResponseSchema.parse({
         id: run.run.id,

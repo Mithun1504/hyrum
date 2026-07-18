@@ -1,4 +1,5 @@
 import { withAuth } from "@workos-inc/authkit-nextjs";
+import { z } from "zod";
 import { normalizeView, WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { getWorkspaceSnapshot, parseFilters } from "@/services/workspace-data";
 
@@ -16,11 +17,13 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
     if (typeof value === "string") urlSearchParams.set(key, value);
   }
 
+  const view = normalizeView(typeof params.view === "string" ? params.view : undefined);
+  const replayRunId = view === "replay" ? z.string().uuid().safeParse(params.run).data : undefined;
   const auth = await withAuth({ ensureSignedIn: true });
   const snapshot = await getWorkspaceSnapshot(parseFilters(urlSearchParams), {
     accessToken: auth.accessToken,
+    replayRunId,
   });
-  const view = normalizeView(typeof params.view === "string" ? params.view : undefined);
 
   const actorLabel =
     [auth.user.firstName, auth.user.lastName].filter(Boolean).join(" ") || auth.user.email;

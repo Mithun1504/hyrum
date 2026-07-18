@@ -21,18 +21,37 @@ describe("GateView", () => {
     );
 
     expect(deltaRow("$.t1")).toHaveTextContent("T1");
-    expect(deltaRow("$.t1")).toHaveTextContent("BLOCK");
+    expect(deltaRow("$.t1")).toHaveTextContent("Matched T1 echo");
 
     expect(deltaRow("$.t2")).toHaveTextContent("T2");
-    expect(deltaRow("$.t2")).toHaveTextContent("WARN");
+    expect(deltaRow("$.t2")).toHaveTextContent("Matched T2 pattern");
 
     expect(deltaRow("$.t3")).toHaveTextContent("T3");
-    expect(deltaRow("$.t3")).toHaveTextContent("EXPOSURE");
-    expect(within(deltaRow("$.t3")).queryByText("WARN")).not.toBeInTheDocument();
+    expect(deltaRow("$.t3")).toHaveTextContent("Exposure only");
+    expect(within(deltaRow("$.t3")).queryByText("Matched T2 pattern")).not.toBeInTheDocument();
 
-    expect(deltaRow("$.unmatched")).toHaveTextContent("NOTE");
+    expect(deltaRow("$.unmatched")).toHaveTextContent("Unmatched note");
     expect(within(deltaRow("$.unmatched")).queryByText("T3")).not.toBeInTheDocument();
-    expect(within(deltaRow("$.unmatched")).queryByText("WARN")).not.toBeInTheDocument();
+    expect(
+      within(deltaRow("$.unmatched")).queryByText("Matched T2 pattern"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links the gate receipt action to a replay-matched claim, not the implicit selection", () => {
+    const snapshot = snapshotWithDeltas([delta("T2")]);
+    const selected = { ...ledgerRow("T1"), receipt_id: "receipt-for-unrelated-selection" };
+    const matched = { ...ledgerRow("T2"), receipt_id: "receipt-for-matched-claim" };
+    snapshot.selected = selected;
+    snapshot.allLedgerRows = snapshot.allLedgerRows.map((row) =>
+      row.claim_id === matched.claim_id ? matched : row,
+    );
+
+    render(<GateView snapshot={snapshot} />);
+
+    expect(screen.getByRole("link", { name: "Matched receipt" })).toHaveAttribute(
+      "href",
+      `/app?view=behavior&entry=${matched.id}`,
+    );
   });
 });
 
@@ -48,7 +67,7 @@ function delta(tier?: EvidenceTier): ReplayDelta {
 }
 
 function deltaRow(path: string) {
-  const row = screen.getByText(`${path} · shape delta`).closest("div");
+  const row = screen.getByText(`${path} · shape delta`).closest("article");
   expect(row).not.toBeNull();
   return row as HTMLElement;
 }
@@ -83,8 +102,14 @@ function snapshotWithDeltas(deltas: ReplayDelta[]): WorkspaceSnapshot {
       base_image_digest: `sha256:${"a".repeat(64)}`,
       candidate_image_digest: `sha256:${"b".repeat(64)}`,
       extractor_version: "extractors-go-0.4.1",
-      corpus_digest: "sha256:fixture",
+      corpus_digest: `sha256:${"c".repeat(64)}`,
+      fixture_digest: `sha256:${"d".repeat(64)}`,
+      mask_digest: `sha256:${"e".repeat(64)}`,
+      runner_version: "hyrum-replay-0.4.1",
+      policy_id: "88888888-8888-4888-8888-888888888888",
+      policy_version: 1,
       runs: 1,
+      outcome: "block",
       results: [{ case_id: "case", stable: true, quarantined: false, deltas }],
       decision: {
         outcome: "block",

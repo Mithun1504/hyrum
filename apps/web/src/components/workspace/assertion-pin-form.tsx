@@ -1,6 +1,6 @@
 "use client";
 
-import { Pin, ShieldAlert } from "lucide-react";
+import { Pin } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -34,29 +34,19 @@ export function AssertionPinForm({
   const reasonError = reason.trim().length === 0 ? "Add a reason before pinning." : null;
 
   return (
-    <form
-      action={action}
-      className="grid gap-3 rounded-lg border border-border bg-industrial-3 p-4"
-    >
+    <form action={action} className="grid gap-4 rounded-md border border-border bg-card p-4">
       <input type="hidden" name="behavior_id" value={behaviorId} />
       <input type="hidden" name="claim_id" value={claimId} />
-      <div className="flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-tier-pattern/15 text-tier-pattern">
-          <ShieldAlert className="size-4" aria-hidden="true" />
-        </span>
-        <div>
-          <h3 className="font-sans text-sm font-bold">Pin as assertion</h3>
-          <p className="text-[11px] text-muted-foreground">
-            Default expiry is 90 days. The behavior becomes a replay test on every CI run.
-          </p>
-        </div>
+      <div>
+        <h3 className="text-sm font-semibold">Pin as a compatibility assertion</h3>
+        <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">
+          Record why this behavior must stay compatible. Hyrum will enforce it during replay until
+          the 90-day review date.
+        </p>
       </div>
 
       <div className="grid gap-2">
-        <label
-          htmlFor="assertion-reason"
-          className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
-        >
+        <label htmlFor="assertion-reason" className="text-xs font-medium text-foreground">
           Reason
         </label>
         <textarea
@@ -68,7 +58,7 @@ export function AssertionPinForm({
           onChange={(event) => {
             setReason(event.target.value);
           }}
-          className="min-h-24 resize-y rounded-md border border-input bg-background px-3 py-2 text-xs text-foreground outline-none transition-colors duration-150 ease-out placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-24 resize-y rounded-[4px] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50"
           placeholder="Customer migration window for support importer."
           aria-invalid={Boolean(reasonError && reason.length > 0)}
           aria-describedby="assertion-reason-help"
@@ -81,10 +71,7 @@ export function AssertionPinForm({
       </div>
 
       <div className="grid gap-2">
-        <label
-          htmlFor="assertion-expiry"
-          className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
-        >
+        <label htmlFor="assertion-expiry" className="text-xs font-medium text-foreground">
           Expiry
         </label>
         <input
@@ -93,7 +80,7 @@ export function AssertionPinForm({
           type="date"
           value={expiryDate}
           readOnly
-          className="h-11 rounded-md border border-input bg-background px-3 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="h-11 rounded-[4px] border border-input bg-background px-3 text-sm text-foreground outline-none transition-[border-color,box-shadow] duration-150 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
         />
       </div>
 

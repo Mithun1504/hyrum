@@ -44,7 +44,7 @@ describe("authorizeReplayIntegrations", () => {
 
 it("builds replay links from configured web URL, never request headers", () => {
   expect(replayDetailsUrl("https://app.hyrum.dev", organizationId)).toBe(
-    `https://app.hyrum.dev/app/replay/${organizationId}`,
+    `https://app.hyrum.dev/app?view=replay&run=${organizationId}`,
   );
 });
 

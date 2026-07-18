@@ -271,52 +271,130 @@ try {
       },
     });
 
-    const behaviorKinds = ["shape", "ordering", "error", "status"] as const;
+    const behaviorFixtures = [
+      {
+        key: "idempotency-echo",
+        kind: "shape",
+        operationIndex: 0,
+        consumerIndex: 0,
+        sessionIndex: 0,
+        path: "$.response.body.idempotency_key",
+        label: "Echoed idempotency key",
+        title: "Echoed idempotency key",
+        count: 24,
+        receiptExcerpt: {
+          method: "POST",
+          path_template: "/v1/orders",
+          response_path: "$.response.body.idempotency_key",
+          echoed_request_path: "$.request.headers.idempotency-key",
+          value_hash: "h_seed_idempotency_key",
+        },
+        replayBefore: { field: "idempotency_key", present: true },
+        replayAfter: { field: "idempotency_key", present: false },
+      },
+      {
+        key: "validation-error-template",
+        kind: "error",
+        operationIndex: 2,
+        consumerIndex: 1,
+        sessionIndex: 1,
+        path: "$.response.error.template",
+        label: "Validation error template branch",
+        title: "Validation error template branch",
+        count: 11,
+        receiptExcerpt: {
+          method: "PATCH",
+          path_template: "/v1/orders/{id}",
+          status: 422,
+          error_template_hash: "h_seed_validation_template",
+        },
+        replayBefore: { template: "quantity must be positive" },
+        replayAfter: { template: "invalid quantity" },
+      },
+      {
+        key: "legacy-field-exposure",
+        kind: "shape",
+        operationIndex: 1,
+        consumerIndex: 2,
+        sessionIndex: 2,
+        path: "$.response.body.legacy_id",
+        label: "Legacy field exposure",
+        title: "Legacy field exposure",
+        count: 5,
+        receiptExcerpt: {
+          method: "GET",
+          path_template: "/v1/orders/{id}",
+          response_path: "$.response.body.legacy_id",
+          value_hash: "h_seed_legacy_id",
+        },
+        replayBefore: { field: "legacy_id", present: true },
+        replayAfter: { field: "legacy_id", present: true },
+      },
+      {
+        key: "deletion-status-exposure",
+        kind: "status",
+        operationIndex: 3,
+        consumerIndex: 2,
+        sessionIndex: 2,
+        path: "$.response.status",
+        label: "Undeclared deletion status exposure",
+        title: "Undeclared deletion status",
+        count: 2,
+        receiptExcerpt: null,
+        replayBefore: { status: 204 },
+        replayAfter: { status: 204 },
+      },
+    ] as const;
     await tx.insert(behaviorDefinitions).values(
-      behaviorKinds.map((kind, index) => ({
+      behaviorFixtures.map((fixture, index) => ({
         id: required(ids.behavior, index),
         organizationId: ids.organization,
         fingerprintDigest: digest(String(index + 2)),
-        kind,
+        kind: fixture.kind,
         extractorVersion: "extractor-go-seed-v1",
-        fingerprint: { path: `$.seed.${kind}`, operation: required(ids.operation, index) },
+        fingerprint: {
+          path: fixture.path,
+          operation: required(ids.operation, fixture.operationIndex),
+        },
         declared: false,
-        label: `${kind[0]?.toUpperCase()}${kind.slice(1)} accidental behavior`,
+        label: fixture.label,
       })),
     );
     await tx.insert(behaviorObservations).values(
-      behaviorKinds.map((_, index) => ({
+      behaviorFixtures.map((fixture, index) => ({
         organizationId: ids.organization,
-        operationId: required(ids.operation, index),
-        consumerId: required(ids.consumer, index % 3),
+        operationId: required(ids.operation, fixture.operationIndex),
+        consumerId: required(ids.consumer, fixture.consumerIndex),
         behaviorId: required(ids.behavior, index),
-        captureSessionId: required(ids.session, index % 3),
+        captureSessionId: required(ids.session, fixture.sessionIndex),
         eventId: `seed-event-${index + 1}`,
-        count: [24, 11, 5, 2][index] ?? 1,
+        count: fixture.count,
         firstSeenAt: hoursAgo(20 - index),
         lastSeenAt: hoursAgo(index + 1),
       })),
     );
     await tx.insert(receipts).values(
-      [0, 1, 2].map((index) => ({
-        id: required(ids.receipt, index),
-        organizationId: ids.organization,
-        behaviorId: required(ids.behavior, index),
-        consumerId: required(ids.consumer, index),
-        operationId: required(ids.operation, index),
-        captureSessionId: required(ids.session, index),
-        objectKey: `${ids.organization}/receipts/seed-${index + 1}.json`,
-        digest: digest(["6", "7", "8"][index] ?? "6"),
-        redactionVersion: "redaction-v1",
-        sequenceStart: index * 10 + 1,
-        sequenceEnd: index * 10 + 3,
-        excerpt: {
-          method: index === 0 ? "POST" : "GET",
-          path_template: `/v1/seed/${index + 1}`,
-          value_hash: `h_seed_${index + 1}`,
-        },
-        expiresAt: daysFromNow(90),
-      })),
+      behaviorFixtures.flatMap((fixture, index) =>
+        fixture.receiptExcerpt === null
+          ? []
+          : [
+              {
+                id: required(ids.receipt, index),
+                organizationId: ids.organization,
+                behaviorId: required(ids.behavior, index),
+                consumerId: required(ids.consumer, fixture.consumerIndex),
+                operationId: required(ids.operation, fixture.operationIndex),
+                captureSessionId: required(ids.session, fixture.sessionIndex),
+                objectKey: `${ids.organization}/receipts/seed-${index + 1}.json`,
+                digest: digest(["6", "7", "8"][index] ?? "6"),
+                redactionVersion: "redaction-v1",
+                sequenceStart: index * 10 + 1,
+                sequenceEnd: index * 10 + 3,
+                excerpt: fixture.receiptExcerpt,
+                expiresAt: daysFromNow(90),
+              },
+            ],
+      ),
     );
 
     const tiers = ["T1", "T2", "T3", "T3"] as const;
@@ -326,7 +404,7 @@ try {
         id: required(ids.claim, index),
         organizationId: ids.organization,
         behaviorId: required(ids.behavior, index),
-        consumerId: required(ids.consumer, index % 3),
+        consumerId: required(ids.consumer, required(behaviorFixtures, index).consumerIndex),
         tier,
         state: required(states, index),
         confidence: [100, 82, 35, 20][index] ?? 0,
@@ -340,17 +418,11 @@ try {
         organizationId: ids.organization,
         claimId: required(ids.claim, index),
         behaviorId: required(ids.behavior, index),
-        consumerId: required(ids.consumer, index % 3),
-        operationId: required(ids.operation, index),
+        consumerId: required(ids.consumer, required(behaviorFixtures, index).consumerIndex),
+        operationId: required(ids.operation, required(behaviorFixtures, index).operationIndex),
         tier,
         state: required(states, index),
-        title:
-          [
-            "Echoed idempotency key",
-            "Stable validation error ordering",
-            "Legacy field exposure",
-            "Undeclared deletion status",
-          ][index] ?? "Seed behavior",
+        title: required(behaviorFixtures, index).title,
         lastSeenAt: hoursAgo(index + 1),
         freshnessUntil: daysFromNow(index === 3 ? -1 : 90),
         receiptId: index < 3 ? required(ids.receipt, index) : null,
@@ -406,14 +478,14 @@ try {
       objectKey: `${ids.organization}/corpora/seed-v1.json`,
     });
     await tx.insert(corpusItems).values(
-      behaviorKinds.map((kind, index) => ({
+      behaviorFixtures.map((fixture, index) => ({
         organizationId: ids.organization,
         corpusId: ids.corpus,
-        caseId: `seed-${kind}-case`,
-        operationId: required(ids.operation, index),
-        consumerId: required(ids.consumer, index % 3),
+        caseId: `seed-${fixture.key}-case`,
+        operationId: required(ids.operation, fixture.operationIndex),
+        consumerId: required(ids.consumer, fixture.consumerIndex),
         coverageClass: index === 0 ? "T1" : index === 1 ? "T2" : "exposure",
-        objectKey: `${ids.organization}/corpora/seed-${kind}.json`,
+        objectKey: `${ids.organization}/corpora/seed-${fixture.key}.json`,
         digest: digest(["a", "b", "c", "d"][index] ?? "a"),
       })),
     );
@@ -440,29 +512,32 @@ try {
       generatedAt: hoursAgo(1),
     });
     await tx.insert(replayDeltas).values(
-      tiers.slice(0, 3).map((tier, index) => ({
-        organizationId: ids.organization,
-        replayRunId: ids.replay,
-        caseId: `seed-${required(behaviorKinds, index)}-case`,
-        kind: required(behaviorKinds, index),
-        path: `$.seed.${required(behaviorKinds, index)}`,
-        digest: digest(["f", "0", "1"][index] ?? "f"),
-        stable: index !== 2,
-        quarantined: index === 2,
-        before: { present: true },
-        after: { present: false },
-        matches: [{ claim_id: required(ids.claim, index), tier }],
-      })),
+      [0, 1].map((index) => {
+        const fixture = required(behaviorFixtures, index);
+        return {
+          organizationId: ids.organization,
+          replayRunId: ids.replay,
+          caseId: `seed-${fixture.key}-case`,
+          kind: fixture.kind,
+          path: fixture.path,
+          digest: digest(["f", "0", "1"][index] ?? "f"),
+          stable: true,
+          quarantined: false,
+          before: fixture.replayBefore,
+          after: fixture.replayAfter,
+          matches: [{ claim_id: required(ids.claim, index) }],
+        };
+      }),
     );
     await tx.insert(replayAssertionResults).values(
-      [0, 1, 2].map((index) => ({
+      [0].map((index) => ({
         organizationId: ids.organization,
         replayRunId: ids.replay,
         assertionId: required(ids.assertion, index),
         behaviorId: required(ids.behavior, index),
         claimId: required(ids.claim, index),
-        caseId: `seed-${required(behaviorKinds, index)}-case`,
-        outcome: index === 0 ? ("fail" as const) : ("pass" as const),
+        caseId: `seed-${required(behaviorFixtures, index).key}-case`,
+        outcome: "fail" as const,
       })),
     );
     await tx.insert(gateDecisions).values({
@@ -471,10 +546,14 @@ try {
       replayRunId: ids.replay,
       policyId: ids.policy,
       outcome: "block",
-      blockCount: 1,
+      blockCount: 2,
       warnCount: 1,
-      noteCount: 1,
-      reasons: ["T1 echoed idempotency key changed"],
+      noteCount: 0,
+      reasons: [
+        "1 blocking claim(s) matched stable deltas",
+        "1 pinned assertion(s) failed replay",
+        "1 warning claim(s) matched stable deltas",
+      ],
     });
 
     await tx.insert(jobs).values(

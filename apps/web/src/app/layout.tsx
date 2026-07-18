@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { geistMono, geistSans } from "@/lib/fonts";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -24,11 +23,7 @@ export default function RootLayout({
   );
 
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable}`}
-    >
+    <html lang="en" suppressHydrationWarning>
       <body>
         <Providers authEnabled={authEnabled}>{children}</Providers>
       </body>

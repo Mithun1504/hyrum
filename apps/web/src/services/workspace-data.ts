@@ -1,4 +1,5 @@
-import type { ProgressEventTopic } from "@hyrum/api-client";
+import { ControlPlaneError, type ProgressEventTopic } from "@hyrum/api-client";
+import type { ReplayRunDetailResponse } from "@hyrum/contracts";
 import { createControlPlane } from "@/services/control-plane";
 
 export type EvidenceTier = "T1" | "T2" | "T3";
@@ -61,7 +62,7 @@ export type Assertion = {
 export type GatePolicy = {
   id: string;
   version: number;
-  block_tiers: EvidenceTier[];
+  block_tiers: Array<Extract<EvidenceTier, "T1">>;
   warn_tiers: EvidenceTier[];
   active: boolean;
 };
@@ -81,7 +82,7 @@ export type ReplayDelta = {
   before?: unknown;
   after?: unknown;
   digest: string;
-  matches: Array<{ claim_id: string; tier: EvidenceTier }>;
+  matches: Array<{ claim_id: string; tier: EvidenceTier | null }>;
 };
 
 export type ReplayAssertionResult = {
@@ -101,7 +102,13 @@ export type ReplayReport = {
   candidate_image_digest: string;
   extractor_version: string;
   corpus_digest: string;
+  fixture_digest: string;
+  mask_digest: string;
+  runner_version: string;
+  policy_id: string;
+  policy_version: number;
   runs: number | null;
+  outcome: "pass" | "warn" | "block";
   results: Array<{
     case_id: string;
     stable: boolean;
@@ -173,35 +180,17 @@ type WorkspaceApi = {
   listAssertions(): Promise<Assertion[]>;
   getPolicy(): Promise<GatePolicy>;
   getLatestReplayRun(): Promise<ReplayRunDetail>;
+  getReplayRun?(id: string): Promise<ReplayRunDetail>;
   getWorkspaceSummary(): Promise<WorkspaceSummary>;
   listProgressEvents(limit?: number): Promise<ProgressEvent[]>;
 };
 
-type ReplayRunDetail = {
-  id: string;
-  generated_at: string;
-  base_url: string;
-  candidate_url: string;
-  base_image_digest: string;
-  candidate_image_digest: string;
-  extractor_version: string;
-  corpus_digest: string;
-  runs: number;
-  decision: ReplayReport["decision"];
-  deltas: Array<
-    Omit<ReplayDelta, "matches"> & {
-      case_id: string;
-      stable: boolean;
-      quarantined: boolean;
-      matches: Array<{ claim_id: string; tier?: EvidenceTier }>;
-    }
-  >;
-  assertion_results: ReplayAssertionResult[];
-};
+type ReplayRunDetail = ReplayRunDetailResponse;
 
 type WorkspaceDataOptions = {
   accessToken?: string;
   client?: WorkspaceApi;
+  replayRunId?: string;
 };
 
 export function parseFilters(searchParams: URLSearchParams): FilterState {
@@ -243,7 +232,9 @@ export async function getWorkspaceSnapshot(
     client.listConsumers(),
     client.listAssertions(),
     client.getPolicy(),
-    client.getLatestReplayRun(),
+    options.replayRunId && client.getReplayRun
+      ? client.getReplayRun(options.replayRunId)
+      : client.getLatestReplayRun(),
     client.getWorkspaceSummary(),
     client.listProgressEvents(20),
   ]);
@@ -253,8 +244,8 @@ export async function getWorkspaceSnapshot(
     failureMessage("Ledger", ledgerResult),
     failureMessage("Consumers", consumersResult),
     failureMessage("Assertions", assertionsResult),
-    failureMessage("Policy", policyResult),
-    failureMessage("Replay", replayResult),
+    optionalFailureMessage("Policy", policyResult),
+    replayFailureMessage(replayResult, options.replayRunId !== undefined),
     failureMessage("Workspace summary", summaryResult),
     failureMessage("Progress", progressResult),
   ].filter((message): message is string => message !== null);
@@ -270,7 +261,7 @@ export async function getWorkspaceSnapshot(
       selected.receipt_digest = receipt.digest;
       selected.evidence_summary = `Redacted receipt ${receipt.digest}; sequence ${receipt.sequence_start}-${receipt.sequence_end}.`;
     } catch (error) {
-      dataErrors.push(`Receipt: ${safeErrorMessage(error)}`);
+      if (!isNotFound(error)) dataErrors.push(`Receipt: ${safeErrorMessage(error)}`);
     }
   }
 
@@ -328,10 +319,10 @@ function toReplayReport(run: ReplayRunDetail | null, rows: LedgerRow[] = []): Re
       before: delta.before,
       after: delta.after,
       digest: delta.digest,
-      matches: delta.matches.flatMap((match) => {
-        const tier = match.tier ?? tierByClaimId.get(match.claim_id);
-        return tier ? [{ claim_id: match.claim_id, tier }] : [];
-      }),
+      matches: delta.matches.map((match) => ({
+        claim_id: match.claim_id,
+        tier: tierByClaimId.get(match.claim_id) ?? null,
+      })),
     });
     results.set(delta.case_id, result);
   }
@@ -344,7 +335,13 @@ function toReplayReport(run: ReplayRunDetail | null, rows: LedgerRow[] = []): Re
     candidate_image_digest: run.candidate_image_digest,
     extractor_version: run.extractor_version,
     corpus_digest: run.corpus_digest,
+    fixture_digest: run.fixture_digest,
+    mask_digest: run.mask_digest,
+    runner_version: run.runner_version,
+    policy_id: run.policy_id,
+    policy_version: run.policy_version,
     runs: run.runs,
+    outcome: run.outcome,
     results: [...results.values()],
     decision: run.decision,
     assertion_results: run.assertion_results,
@@ -372,6 +369,24 @@ function fulfilledValue<T>(result: PromiseSettledResult<T>): T | null {
 
 function failureMessage<T>(label: string, result: PromiseSettledResult<T>): string | null {
   return result.status === "rejected" ? `${label}: ${safeErrorMessage(result.reason)}` : null;
+}
+
+function optionalFailureMessage<T>(label: string, result: PromiseSettledResult<T>): string | null {
+  return result.status === "rejected" && !isNotFound(result.reason)
+    ? `${label}: ${safeErrorMessage(result.reason)}`
+    : null;
+}
+
+function replayFailureMessage<T>(result: PromiseSettledResult<T>, explicitlyRequested: boolean) {
+  if (result.status === "fulfilled") return null;
+  if (!isNotFound(result.reason)) return `Replay: ${safeErrorMessage(result.reason)}`;
+  return explicitlyRequested
+    ? "Replay: Linked replay run was not found or is unavailable to this organization."
+    : null;
+}
+
+function isNotFound(error: unknown) {
+  return error instanceof ControlPlaneError && error.problem.status === 404;
 }
 
 function safeErrorMessage(error: unknown) {
