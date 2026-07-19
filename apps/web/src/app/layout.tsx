@@ -2,6 +2,18 @@ import type { Metadata } from "next";
 import { Providers } from "./providers";
 import "./globals.css";
 
+const themeBootScript = `(() => {
+  try {
+    const stored = localStorage.getItem("theme");
+    const theme = stored === "light" || stored === "dark" ? stored : "dark";
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  } catch {
+    document.documentElement.classList.add("dark");
+    document.documentElement.style.colorScheme = "dark";
+  }
+})();`;
+
 export const metadata: Metadata = {
   title: {
     default: "Hyrum",
@@ -24,6 +36,9 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script>{themeBootScript}</script>
+      </head>
       <body>
         <Providers authEnabled={authEnabled}>{children}</Providers>
       </body>

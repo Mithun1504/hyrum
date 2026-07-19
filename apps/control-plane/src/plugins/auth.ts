@@ -76,6 +76,12 @@ const defaultWorkosIssuer = "https://api.workos.com/";
 const membershipVerificationTtlMs = 45_000;
 const membershipVerificationCacheMaxEntries = 10_000;
 
+function initialOrganizationRole(workosRole: string): OrganizationRole {
+  if (workosRole === "member") return "engineer";
+  const parsedRole = organizationRoleSchema.safeParse(workosRole);
+  return parsedRole.success ? parsedRole.data : "viewer";
+}
+
 function workosJwksUrl(clientId: string) {
   const url = new URL(defaultWorkosIssuer);
   url.pathname = `/sso/jwks/${encodeURIComponent(clientId)}`;
@@ -138,8 +144,7 @@ async function provisionHumanMembership(
     return undefined;
   }
 
-  const parsedRole = organizationRoleSchema.safeParse(identity.membership.role.slug);
-  const initialRole = parsedRole.success ? parsedRole.data : "viewer";
+  const initialRole = initialOrganizationRole(identity.membership.role.slug);
   const derivedName = [identity.user.firstName, identity.user.lastName].filter(Boolean).join(" ");
   const displayName = identity.user.name ?? (derivedName || null);
 

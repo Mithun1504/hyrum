@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
   apiSpecs,
@@ -96,13 +96,31 @@ if (!connectionString) throw new Error("DATABASE_URL is required to seed Hyrum")
 if (process.env.NODE_ENV === "production" && process.env.HYRUM_ALLOW_PRODUCTION_SEED !== "1") {
   throw new Error("Production seeding is disabled; set HYRUM_ALLOW_PRODUCTION_SEED=1 explicitly");
 }
+const seedExistingOrganization = process.env.HYRUM_SEED_EXISTING_ORGANIZATION === "1";
+const organizationId = process.env.HYRUM_SEED_ORGANIZATION_ID ?? ids.organization;
+const userId = process.env.HYRUM_SEED_USER_ID ?? ids.user;
+if (
+  seedExistingOrganization &&
+  (!process.env.HYRUM_SEED_ORGANIZATION_ID || !process.env.HYRUM_SEED_USER_ID)
+) {
+  throw new Error("Existing-organization seeding requires organization and user IDs");
+}
+
+function seedRole() {
+  const role = process.env.HYRUM_SEED_USER_ROLE;
+  if (role === "owner" || role === "admin" || role === "engineer" || role === "viewer") {
+    return role;
+  }
+  if (role) throw new Error(`Unsupported Hyrum seed role: ${role}`);
+  return seedExistingOrganization ? "engineer" : "owner";
+}
 
 const now = new Date();
 const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000);
 const daysFromNow = (days: number) => new Date(now.getTime() + days * 86_400_000);
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 const corpusObjectKey = (character: string) =>
-  `organizations/${ids.organization}/corpus/sha256/${character.repeat(64)}`;
+  `organizations/${organizationId}/corpus/sha256/${character.repeat(64)}`;
 const seedAgentToken =
   process.env.HYRUM_SEED_AGENT_TOKEN ?? "hyrum_seedagent_seed-development-token-0001";
 const signingPublicKey = process.env.HYRUM_SEED_SIGNING_PUBLIC_KEY;
@@ -118,34 +136,56 @@ try {
     const existing = await tx
       .select({ id: organizations.id })
       .from(organizations)
-      .where(eq(organizations.id, ids.organization))
+      .where(eq(organizations.id, organizationId))
       .limit(1);
-    if (existing.length > 0) return "already-present" as const;
+    if (existing.length > 0 && !seedExistingOrganization) return "already-present" as const;
+    if (existing.length === 0 && seedExistingOrganization) {
+      throw new Error(`Target organization ${organizationId} does not exist`);
+    }
+    if (existing.length === 0) {
+      await tx.insert(organizations).values({
+        id: organizationId,
+        workosOrganizationId: process.env.HYRUM_SEED_WORKOS_ORGANIZATION_ID ?? "org_hyrum_seed",
+        name: process.env.HYRUM_SEED_ORGANIZATION_NAME ?? "Hyrum Seed Workspace",
+        region: "us-east-1",
+        retentionDays: 90,
+      });
+    }
+    await tx.execute(sql`select set_config('app.organization_id', ${organizationId}, true)`);
 
-    await tx.insert(organizations).values({
-      id: ids.organization,
-      workosOrganizationId: process.env.HYRUM_SEED_WORKOS_ORGANIZATION_ID ?? "org_hyrum_seed",
-      name: process.env.HYRUM_SEED_ORGANIZATION_NAME ?? "Hyrum Seed Workspace",
-      region: "us-east-1",
-      retentionDays: 90,
-    });
-    await tx.execute(sql`select set_config('app.organization_id', ${ids.organization}, true)`);
-
-    await tx.insert(users).values({
-      id: ids.user,
-      workosUserId: process.env.HYRUM_SEED_WORKOS_USER_ID ?? "user_hyrum_seed",
-      email: process.env.HYRUM_SEED_USER_EMAIL ?? "seed-owner@example.test",
-      displayName: "Seed Owner",
-    });
-    await tx.insert(memberships).values({
-      id: ids.membership,
-      organizationId: ids.organization,
-      userId: ids.user,
-      role: "owner",
-    });
+    if (seedExistingOrganization) {
+      const [membership] = await tx
+        .update(memberships)
+        .set({ role: seedRole() })
+        .where(and(eq(memberships.organizationId, organizationId), eq(memberships.userId, userId)))
+        .returning({ id: memberships.id });
+      if (!membership)
+        throw new Error(`Target user ${userId} is not a member of ${organizationId}`);
+      const seededSpec = await tx
+        .select({ id: apiSpecs.id })
+        .from(apiSpecs)
+        .where(
+          and(eq(apiSpecs.organizationId, organizationId), eq(apiSpecs.version, "2026-07-seed")),
+        )
+        .limit(1);
+      if (seededSpec.length > 0) return "already-present" as const;
+    } else {
+      await tx.insert(users).values({
+        id: userId,
+        workosUserId: process.env.HYRUM_SEED_WORKOS_USER_ID ?? "user_hyrum_seed",
+        email: process.env.HYRUM_SEED_USER_EMAIL ?? "seed-owner@example.test",
+        displayName: "Seed Owner",
+      });
+      await tx.insert(memberships).values({
+        id: ids.membership,
+        organizationId,
+        userId,
+        role: seedRole(),
+      });
+    }
     await tx.insert(agents).values({
       id: ids.agent,
-      organizationId: ids.organization,
+      organizationId,
       name: "Seed capture and replay agent",
       tokenPrefix: "seedagent",
       tokenHash: `sha256:${createHash("sha256").update(seedAgentToken).digest("hex")}`,
@@ -155,34 +195,34 @@ try {
     });
     await tx.insert(githubRepositories).values({
       id: ids.github,
-      organizationId: ids.organization,
+      organizationId,
       installationId: 84_270,
       owner: "hyrum-seed",
       name: "orders-api",
     });
     await tx.insert(slackChannels).values({
       id: ids.slack,
-      organizationId: ids.organization,
+      organizationId,
       channelId: "CSEEDGATES",
     });
 
     await tx.insert(apiSpecs).values({
       id: ids.spec,
-      organizationId: ids.organization,
+      organizationId,
       version: "2026-07-seed",
-      objectKey: `${ids.organization}/api-specs/seed-openapi.json`,
+      objectKey: `${organizationId}/api-specs/seed-openapi.json`,
       digest: digest("1"),
       normalized: {
         openapi: "3.1.0",
         info: { title: "Seed Orders API", version: "1.0.0" },
       },
       active: true,
-      uploadedBy: ids.user,
+      uploadedBy: userId,
     });
     await tx.insert(operations).values([
       {
         id: ids.operation[0],
-        organizationId: ids.organization,
+        organizationId,
         apiSpecId: ids.spec,
         method: "POST",
         pathTemplate: "/v1/orders",
@@ -190,7 +230,7 @@ try {
       },
       {
         id: ids.operation[1],
-        organizationId: ids.organization,
+        organizationId,
         apiSpecId: ids.spec,
         method: "GET",
         pathTemplate: "/v1/orders/{id}",
@@ -198,7 +238,7 @@ try {
       },
       {
         id: ids.operation[2],
-        organizationId: ids.organization,
+        organizationId,
         apiSpecId: ids.spec,
         method: "PATCH",
         pathTemplate: "/v1/orders/{id}",
@@ -206,7 +246,7 @@ try {
       },
       {
         id: ids.operation[3],
-        organizationId: ids.organization,
+        organizationId,
         apiSpecId: ids.spec,
         method: "DELETE",
         pathTemplate: "/v1/orders/{id}",
@@ -216,21 +256,21 @@ try {
     await tx.insert(consumers).values([
       {
         id: ids.consumer[0],
-        organizationId: ids.organization,
+        organizationId,
         stableId: "checkout-web",
         displayAlias: "Checkout Web",
         lastSeenAt: hoursAgo(1),
       },
       {
         id: ids.consumer[1],
-        organizationId: ids.organization,
+        organizationId,
         stableId: "support-sync",
         displayAlias: "Support Sync",
         lastSeenAt: hoursAgo(2),
       },
       {
         id: ids.consumer[2],
-        organizationId: ids.organization,
+        organizationId,
         stableId: "warehouse-worker",
         displayAlias: "Warehouse Worker",
         lastSeenAt: hoursAgo(3),
@@ -239,7 +279,7 @@ try {
     await tx.insert(captureSessions).values([
       {
         id: ids.session[0],
-        organizationId: ids.organization,
+        organizationId,
         consumerId: ids.consumer[0],
         sessionId: "seed-session-echo",
         startedAt: hoursAgo(2),
@@ -248,7 +288,7 @@ try {
       },
       {
         id: ids.session[1],
-        organizationId: ids.organization,
+        organizationId,
         consumerId: ids.consumer[1],
         sessionId: "seed-session-pattern",
         startedAt: hoursAgo(4),
@@ -257,7 +297,7 @@ try {
       },
       {
         id: ids.session[2],
-        organizationId: ids.organization,
+        organizationId,
         consumerId: ids.consumer[2],
         sessionId: "seed-session-exposure",
         startedAt: hoursAgo(6),
@@ -266,7 +306,7 @@ try {
       },
     ]);
     await tx.insert(captureBatches).values({
-      organizationId: ids.organization,
+      organizationId,
       agentId: ids.agent,
       batchId: "seed-batch-all-tiers",
       response: {
@@ -353,7 +393,7 @@ try {
     await tx.insert(behaviorDefinitions).values(
       behaviorFixtures.map((fixture, index) => ({
         id: required(ids.behavior, index),
-        organizationId: ids.organization,
+        organizationId,
         fingerprintDigest: digest(String(index + 2)),
         kind: fixture.kind,
         extractorVersion: "extractor-go-seed-v1",
@@ -367,7 +407,7 @@ try {
     );
     await tx.insert(behaviorObservations).values(
       behaviorFixtures.map((fixture, index) => ({
-        organizationId: ids.organization,
+        organizationId,
         operationId: required(ids.operation, fixture.operationIndex),
         consumerId: required(ids.consumer, fixture.consumerIndex),
         behaviorId: required(ids.behavior, index),
@@ -385,12 +425,12 @@ try {
           : [
               {
                 id: required(ids.receipt, index),
-                organizationId: ids.organization,
+                organizationId,
                 behaviorId: required(ids.behavior, index),
                 consumerId: required(ids.consumer, fixture.consumerIndex),
                 operationId: required(ids.operation, fixture.operationIndex),
                 captureSessionId: required(ids.session, fixture.sessionIndex),
-                objectKey: `${ids.organization}/receipts/seed-${index + 1}.json`,
+                objectKey: `${organizationId}/receipts/seed-${index + 1}.json`,
                 digest: digest(["6", "7", "8"][index] ?? "6"),
                 redactionVersion: "redaction-v1",
                 sequenceStart: index * 10 + 1,
@@ -407,7 +447,7 @@ try {
     await tx.insert(dependencyClaims).values(
       tiers.map((tier, index) => ({
         id: required(ids.claim, index),
-        organizationId: ids.organization,
+        organizationId,
         behaviorId: required(ids.behavior, index),
         consumerId: required(ids.consumer, required(behaviorFixtures, index).consumerIndex),
         tier,
@@ -419,7 +459,7 @@ try {
         },
         receiptId: index < 3 ? required(ids.receipt, index) : null,
         humanOverrideTier: index === 3 ? ("T2" as const) : null,
-        overriddenBy: index === 3 ? ids.user : null,
+        overriddenBy: index === 3 ? userId : null,
         overrideReason: index === 3 ? "Seeded human promotion for migration review." : null,
         overriddenAt: index === 3 ? hoursAgo(2) : null,
       })),
@@ -427,7 +467,7 @@ try {
     await tx.insert(ledgerEntries).values(
       tiers.map((tier, index) => ({
         id: required(ids.ledger, index),
-        organizationId: ids.organization,
+        organizationId,
         claimId: required(ids.claim, index),
         behaviorId: required(ids.behavior, index),
         consumerId: required(ids.consumer, required(behaviorFixtures, index).consumerIndex),
@@ -443,10 +483,10 @@ try {
     await tx.insert(assertions).values([
       {
         id: ids.assertion[0],
-        organizationId: ids.organization,
+        organizationId,
         behaviorId: ids.behavior[0],
         claimId: ids.claim[0],
-        ownerId: ids.user,
+        ownerId: userId,
         reason: "Checkout retries require the echoed idempotency key.",
         policy: { replay: "required" },
         status: "active",
@@ -454,26 +494,26 @@ try {
       },
       {
         id: ids.assertion[1],
-        organizationId: ids.organization,
+        organizationId,
         behaviorId: ids.behavior[1],
         claimId: ids.claim[1],
-        ownerId: ids.user,
+        ownerId: userId,
         reason: "Support parsing migration is in progress.",
         status: "expired",
         expiresAt: daysFromNow(-1),
       },
       {
         id: ids.assertion[2],
-        organizationId: ids.organization,
+        organizationId,
         behaviorId: ids.behavior[2],
         claimId: ids.claim[2],
-        ownerId: ids.user,
+        ownerId: userId,
         reason: "Exposure was reviewed and deliberately removed.",
         status: "resolved",
         expiresAt: daysFromNow(30),
         resolutionType: "scheduled_break",
         resolutionReason: "The replacement field has been documented and communicated.",
-        resolvedBy: ids.user,
+        resolvedBy: userId,
         resolvedAt: hoursAgo(6),
         customerNotice: {
           subject: "Planned compatibility change",
@@ -495,7 +535,7 @@ try {
 
     await tx.insert(gatePolicies).values({
       id: ids.policy,
-      organizationId: ids.organization,
+      organizationId,
       version: 1,
       blockTiers: ["T1"],
       warnTiers: ["T2"],
@@ -503,19 +543,19 @@ try {
     });
     await tx.insert(replayCorpora).values({
       id: ids.corpus,
-      organizationId: ids.organization,
-      version: "seed-v1",
+      organizationId,
+      version: "HYR-PR-184",
       digest: digest("9"),
       objectKey: corpusObjectKey("9"),
       fixtureDigest: digest("c"),
       fixtureObjectKey: corpusObjectKey("c"),
       stubsObjectKey: corpusObjectKey("d"),
       curationStatus: "ready",
-      createdBy: ids.user,
+      createdBy: userId,
     });
     await tx.insert(corpusItems).values(
       behaviorFixtures.map((fixture, index) => ({
-        organizationId: ids.organization,
+        organizationId,
         corpusId: ids.corpus,
         caseId: `seed-${fixture.key}-case`,
         operationId: required(ids.operation, fixture.operationIndex),
@@ -533,7 +573,7 @@ try {
     );
     await tx.insert(replayRuns).values({
       id: ids.replay,
-      organizationId: ids.organization,
+      organizationId,
       reportVersion: "1",
       baseUrl: "https://base.seed.example.test",
       candidateUrl: "https://candidate.seed.example.test",
@@ -557,7 +597,7 @@ try {
       [0, 1].map((index) => {
         const fixture = required(behaviorFixtures, index);
         return {
-          organizationId: ids.organization,
+          organizationId,
           replayRunId: ids.replay,
           caseId: `seed-${fixture.key}-case`,
           kind: fixture.kind,
@@ -573,7 +613,7 @@ try {
     );
     await tx.insert(replayAssertionResults).values(
       [0].map((index) => ({
-        organizationId: ids.organization,
+        organizationId,
         replayRunId: ids.replay,
         assertionId: required(ids.assertion, index),
         behaviorId: required(ids.behavior, index),
@@ -584,7 +624,7 @@ try {
     );
     await tx.insert(gateDecisions).values({
       id: ids.gate,
-      organizationId: ids.organization,
+      organizationId,
       replayRunId: ids.replay,
       policyId: ids.policy,
       outcome: "block",
@@ -600,7 +640,7 @@ try {
 
     await tx.insert(jobs).values(
       ["pending", "running", "succeeded", "failed", "dead"].map((status, index) => ({
-        organizationId: ids.organization,
+        organizationId,
         type: "assertion.expire",
         payload: { assertion_id: ids.assertion[index % 3] },
         status: status as "pending" | "running" | "succeeded" | "failed" | "dead",
@@ -615,13 +655,13 @@ try {
     );
     await tx.insert(outboxEvents).values([
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "integration.gate_decided",
         idempotencyKey: "seed-outbox-pending",
         payload: { replay_run_id: ids.replay },
       },
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "integration.gate_decided",
         idempotencyKey: "seed-outbox-published",
         payload: { replay_run_id: ids.replay },
@@ -630,28 +670,28 @@ try {
     ]);
     await tx.insert(progressEvents).values([
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "capture.batch_ingested",
         resourceId: "seed-batch-all-tiers",
         payload: { accepted_count: 4 },
         createdAt: hoursAgo(4),
       },
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "ledger.updated",
         resourceId: ids.ledger[0],
         payload: { tier: "T1" },
         createdAt: hoursAgo(3),
       },
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "assertion.pinned",
         resourceId: ids.assertion[0],
         payload: { behavior_id: ids.behavior[0] },
         createdAt: hoursAgo(2),
       },
       {
-        organizationId: ids.organization,
+        organizationId,
         topic: "replay.report_ingested",
         resourceId: ids.replay,
         payload: { outcome: "block" },
@@ -659,16 +699,16 @@ try {
       },
     ]);
     await tx.insert(auditEvents).values({
-      organizationId: ids.organization,
-      actorId: ids.user,
+      organizationId,
+      actorId: userId,
       action: "seed.created",
       resourceType: "organization",
-      resourceId: ids.organization,
+      resourceId: organizationId,
       metadata: { fixtures: "all relational tables" },
     });
     await tx.insert(llmRuns).values({
       id: "b0000000-0000-4000-8000-000000000001",
-      organizationId: ids.organization,
+      organizationId,
       task: "label_behavior",
       model: "gpt-5.6",
       promptVersion: "seed-v1",
@@ -684,8 +724,8 @@ try {
   });
   process.stdout.write(
     result === "created"
-      ? `Seeded organization ${ids.organization}\n`
-      : `Seed organization ${ids.organization} already exists; no changes made\n`,
+      ? `Seeded organization ${organizationId}\n`
+      : `Seed organization ${organizationId} already exists; no changes made\n`,
   );
 } finally {
   await database.close();

@@ -4,6 +4,7 @@ import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { useActionState, useState } from "react";
 import { type ModelAdvisoryState, runModelAdvisoryAction } from "@/app/(dashboard)/app/actions";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { WorkspaceSnapshot } from "@/services/workspace-data";
 
 type AdvisoryRole =
@@ -19,11 +20,13 @@ const descriptions: Record<AdvisoryRole, string> = {
   replay_priorities: "Rank curated replay cases as a cheap prefilter; no case is removed.",
   impact_explanations: "Explain consumer impact using only cited redacted receipts.",
 };
+const unavailableReason = "Capture receipt-backed behavior or curate an enabled replay case first.";
 
 export function ModelAdvisoryWorkbench({ snapshot }: { snapshot: WorkspaceSnapshot }) {
   const [role, setRole] = useState<AdvisoryRole>("behavior_clusters");
   const [state, action, pending] = useActionState(runModelAdvisoryAction, initialState);
   const entityIds = idsForRole(snapshot, role).slice(0, 100);
+  const unavailable = entityIds.length === 0;
 
   return (
     <section className="overflow-hidden rounded-lg border bg-card">
@@ -63,9 +66,25 @@ export function ModelAdvisoryWorkbench({ snapshot }: { snapshot: WorkspaceSnapsh
             {entityIds.length} eligible live entit
             {entityIds.length === 1 ? "y" : "ies"}
           </p>
-          <Button type="submit" disabled={pending || entityIds.length === 0} className="w-fit">
-            <BrainCircuit aria-hidden="true" /> {pending ? "Generating advisory" : "Run advisory"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className="w-fit"
+                tabIndex={unavailable ? 0 : -1}
+                title={unavailable ? unavailableReason : undefined}
+              >
+                <Button type="submit" disabled={pending || unavailable} className="w-fit">
+                  <BrainCircuit aria-hidden="true" />
+                  {pending ? "Generating advisory" : "Run advisory"}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {unavailable ? (
+              <TooltipContent side="right" sideOffset={8}>
+                {unavailableReason}
+              </TooltipContent>
+            ) : null}
+          </Tooltip>
           {state.status !== "idle" ? (
             <p
               role="status"

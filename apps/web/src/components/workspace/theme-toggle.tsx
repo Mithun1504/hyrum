@@ -1,23 +1,40 @@
 "use client";
 
-import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 
-const subscribeToHydration = () => () => undefined;
-const getClientHydrationSnapshot = () => true;
-const getServerHydrationSnapshot = () => false;
+type Theme = "light" | "dark";
+const themeChangeEvent = "hyrum:theme-change";
+
+function subscribeToTheme(callback: () => void) {
+  window.addEventListener(themeChangeEvent, callback);
+  return () => window.removeEventListener(themeChangeEvent, callback);
+}
+
+function getThemeSnapshot(): Theme {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "dark";
+}
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  document.documentElement.style.colorScheme = theme;
+  localStorage.setItem("theme", theme);
+  window.dispatchEvent(new Event(themeChangeEvent));
+}
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const { resolvedTheme, setTheme } = useTheme();
-  const mounted = useSyncExternalStore(
-    subscribeToHydration,
-    getClientHydrationSnapshot,
-    getServerHydrationSnapshot,
-  );
-  const dark = mounted && resolvedTheme === "dark";
+  const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot);
+  const dark = theme === "dark";
   const nextTheme = dark ? "light" : "dark";
-  const actionLabel = mounted ? `Switch to ${nextTheme} theme` : "Change theme";
+  const actionLabel = `Switch to ${nextTheme} theme`;
+
+  function toggleTheme() {
+    applyTheme(nextTheme);
+  }
 
   return (
     <Button
@@ -27,9 +44,9 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       className="w-fit justify-start px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
       aria-label={actionLabel}
       title={actionLabel}
-      onClick={() => setTheme(nextTheme)}
+      onClick={toggleTheme}
     >
-      Theme: {mounted ? (dark ? "dark" : "light") : "…"}
+      Theme: {theme}
     </Button>
   );
 }

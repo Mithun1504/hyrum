@@ -226,7 +226,7 @@ describe("control plane", () => {
     expect(response.json()).toMatchObject({
       actorId: "user-id",
       organizationId: "organization-id",
-      role: "viewer",
+      role: "engineer",
     });
     expect(workos.userManagement.getUser).toHaveBeenCalledWith("user_123");
     expect(workos.organizations.getOrganization).toHaveBeenCalledWith("org_123");
@@ -240,7 +240,7 @@ describe("control plane", () => {
       membership: {
         actorId: "user-id",
         organizationId: "organization-id",
-        role: "viewer",
+        role: "engineer",
       },
       organization: { workosOrganizationId: "org_123", name: "Acme" },
       user: {
@@ -249,6 +249,30 @@ describe("control plane", () => {
         displayName: "Ada Lovelace",
       },
     });
+    await app.close();
+  });
+
+  it("keeps an unrecognized WorkOS role read-only", async () => {
+    mockValidWorkosToken();
+    const database = fakeDatabase(null);
+    const workos = fakeWorkos([
+      {
+        organizationId: "org_123",
+        userId: "user_123",
+        status: "active",
+        role: { slug: "billing" },
+      },
+    ]);
+    const app = await buildAuthTestApp(undefined, database, workos);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/protected",
+      headers: { authorization: "Bearer session-token" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ role: "viewer" });
     await app.close();
   });
 

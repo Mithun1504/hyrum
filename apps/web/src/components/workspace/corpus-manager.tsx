@@ -106,28 +106,31 @@ export function CorpusManager({
               action={createAction}
               className="grid gap-3 rounded-[4px] border border-border p-4"
             >
-              <FormHeading title="Create a draft corpus" />
-              <Field name="version" label="Version" placeholder="2026.07.18" />
-              <ArtifactUploadField
-                keyName="object_key"
-                digestName="digest"
-                label="Redacted corpus archive"
-                required
-              />
-              <ArtifactUploadField
-                keyName="fixture_object_key"
-                digestName="fixture_digest"
-                label="Disposable fixture database"
-                required
-              />
-              <ArtifactUploadField
-                keyName="stubs_object_key"
-                label="Side-effect stub configuration (optional)"
-              />
-              <Button type="submit" disabled={!canManage || creating} className="w-fit gap-2">
-                <Plus aria-hidden="true" /> {creating ? "Creating draft" : "Create draft corpus"}
-              </Button>
-              <ActionMessage state={createState} />
+              <fieldset disabled={!canManage} className="contents">
+                <FormHeading title="Create a draft corpus" />
+                <Field name="version" label="Version" placeholder="2026.07.18" />
+                <ArtifactUploadField
+                  keyName="object_key"
+                  digestName="digest"
+                  label="Redacted corpus archive"
+                  required
+                />
+                <ArtifactUploadField
+                  keyName="fixture_object_key"
+                  digestName="fixture_digest"
+                  label="Disposable fixture database"
+                  required
+                />
+                <ArtifactUploadField
+                  keyName="stubs_object_key"
+                  label="Side-effect stub configuration (optional)"
+                />
+                <Button type="submit" disabled={!canManage || creating} className="w-fit gap-2">
+                  <Plus aria-hidden="true" />
+                  {creating ? "Creating draft" : "Create draft corpus"}
+                </Button>
+                <ActionMessage state={createState} />
+              </fieldset>
             </form>
           )}
           {!canManage ? (

@@ -51,7 +51,7 @@ export function WorkspaceShell({
         authBypass={authBypass}
       />
       <main id="workspace-main" className="min-w-0 flex-1 pb-24 md:pb-0" tabIndex={-1}>
-        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-4 border-b bg-background/95 px-4 pl-16 md:px-6 xl:px-8">
+        <header className="sticky top-0 z-30 flex min-h-16 items-center gap-4 border-b bg-background px-4 pl-16 md:px-6 xl:px-8">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{contextualTitle ?? title}</p>
             <p className="hidden text-xs text-muted-foreground sm:block">

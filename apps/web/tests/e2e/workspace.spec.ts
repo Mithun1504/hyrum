@@ -170,6 +170,28 @@ test.describe("workspace", () => {
     await expect(page.getByRole("main").getByText("deterministic boundary")).toBeVisible();
   });
 
+  test("applies the theme before the next animation frame", async ({ page }) => {
+    await page.goto("/app");
+    const toggle = page.getByRole("button", { name: "Switch to light theme" });
+    await expect(toggle).toBeVisible();
+
+    const result = await toggle.evaluate(async (button) => {
+      if (!(button instanceof HTMLButtonElement)) throw new Error("Theme toggle is not a button");
+      const startedAt = performance.now();
+      button.click();
+      await new Promise(requestAnimationFrame);
+      return {
+        elapsed: performance.now() - startedAt,
+        dark: document.documentElement.classList.contains("dark"),
+        stored: localStorage.getItem("theme"),
+      };
+    });
+
+    expect(result.dark).toBe(false);
+    expect(result.stored).toBe("light");
+    expect(result.elapsed).toBeLessThan(250);
+  });
+
   test("renders workspace content after a mobile reload before opening navigation", async ({
     page,
   }) => {
