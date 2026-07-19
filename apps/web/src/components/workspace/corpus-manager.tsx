@@ -7,8 +7,8 @@ import {
   addReplayCorpusItemAction,
   createReplayCorpusAction,
   type MutationState,
-  prepareCorpusUploadAction,
   updateReplayCorpusStatusAction,
+  uploadCorpusArtifactAction,
 } from "@/app/(dashboard)/app/actions";
 import { Button } from "@/components/ui/button";
 
@@ -31,6 +31,8 @@ export function CorpusManager({
     updateReplayCorpusStatusAction,
     initialState,
   );
+  const [draftUploadReady, setDraftUploadReady] = useState(false);
+  const [createUploads, setCreateUploads] = useState({ archive: false, fixture: false });
 
   return (
     <section className="rounded-md border border-border bg-card">
@@ -79,9 +81,14 @@ export function CorpusManager({
                   digestName="digest"
                   label="Redacted request case"
                   required
+                  onReadyChange={setDraftUploadReady}
                 />
                 <Field name="priority" label="Replay priority" placeholder="100" type="number" />
-                <Button type="submit" disabled={!canManage || adding} className="w-fit gap-2">
+                <Button
+                  type="submit"
+                  disabled={!canManage || adding || !draftUploadReady}
+                  className="w-fit gap-2"
+                >
                   <Plus aria-hidden="true" /> {adding ? "Adding case" : "Add enabled case"}
                 </Button>
                 <ActionMessage state={itemState} />
@@ -114,18 +121,30 @@ export function CorpusManager({
                   digestName="digest"
                   label="Redacted corpus archive"
                   required
+                  onReadyChange={(ready) =>
+                    setCreateUploads((current) => ({ ...current, archive: ready }))
+                  }
                 />
                 <ArtifactUploadField
                   keyName="fixture_object_key"
                   digestName="fixture_digest"
                   label="Disposable fixture database"
                   required
+                  onReadyChange={(ready) =>
+                    setCreateUploads((current) => ({ ...current, fixture: ready }))
+                  }
                 />
                 <ArtifactUploadField
                   keyName="stubs_object_key"
                   label="Side-effect stub configuration (optional)"
                 />
-                <Button type="submit" disabled={!canManage || creating} className="w-fit gap-2">
+                <Button
+                  type="submit"
+                  disabled={
+                    !canManage || creating || !createUploads.archive || !createUploads.fixture
+                  }
+                  className="w-fit gap-2"
+                >
                   <Plus aria-hidden="true" />
                   {creating ? "Creating draft" : "Create draft corpus"}
                 </Button>
@@ -232,11 +251,13 @@ function ArtifactUploadField({
   digestName,
   label,
   required = false,
+  onReadyChange,
 }: {
   keyName: string;
   digestName?: string;
   label: string;
   required?: boolean;
+  onReadyChange?: (ready: boolean) => void;
 }) {
   const [objectKey, setObjectKey] = useState("");
   const [digest, setDigest] = useState("");
@@ -247,38 +268,31 @@ function ArtifactUploadField({
     const file = event.target.files?.[0];
     setObjectKey("");
     setDigest("");
+    onReadyChange?.(false);
     if (!file) {
       setStatus("idle");
       setMessage("");
       return;
     }
     setStatus("uploading");
-    setMessage("Hashing and uploading artifact…");
+    setMessage("Uploading artifact…");
     try {
-      const bytes = await file.arrayBuffer();
-      const hash = await crypto.subtle.digest("SHA-256", bytes);
-      const hex = [...new Uint8Array(hash)]
-        .map((value) => value.toString(16).padStart(2, "0"))
-        .join("");
-      const prepared = await prepareCorpusUploadAction({
-        digest: `sha256:${hex}`,
-        sizeBytes: file.size,
-        contentType: file.type || "application/octet-stream",
-      });
-      if (prepared.status === "error") throw new Error(prepared.message);
-      const response = await fetch(prepared.uploadUrl, {
-        method: "PUT",
-        headers: prepared.headers,
-        body: file,
-      });
-      if (!response.ok) throw new Error(`Object storage returned ${response.status}`);
-      setObjectKey(prepared.objectKey);
-      setDigest(prepared.digest);
+      const formData = new FormData();
+      formData.set("file", file);
+      const uploaded = await uploadCorpusArtifactAction(formData);
+      if (uploaded.status === "error") throw new Error(uploaded.message);
+      setObjectKey(uploaded.objectKey);
+      setDigest(uploaded.digest);
       setStatus("success");
       setMessage(`${file.name} uploaded and integrity-addressed.`);
+      onReadyChange?.(true);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "Artifact upload failed.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Artifact upload failed. Retry the file in a moment.",
+      );
     }
   }
 
@@ -288,7 +302,11 @@ function ArtifactUploadField({
       <span className="relative flex min-h-11 items-center rounded-[4px] border border-dashed border-input bg-background px-3">
         <Upload className="mr-2 size-4 text-muted-foreground" aria-hidden="true" />
         <span className="truncate text-sm text-muted-foreground">
-          {status === "idle" ? "Choose a file" : message}
+          {status === "idle"
+            ? "Choose a file (up to 3 MB)"
+            : status === "error"
+              ? "Upload failed"
+              : message}
         </span>
         <input
           type="file"

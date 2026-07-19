@@ -4,6 +4,7 @@ import { dashboardAuth, e2eAuthBypassEnabled } from "@/services/dashboard-auth";
 import { getWorkspaceSnapshot, parseFilters } from "@/services/workspace-data";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 20;
 
 type WorkspacePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

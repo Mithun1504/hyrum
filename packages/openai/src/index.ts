@@ -5,6 +5,19 @@ import { z } from "zod";
 
 export const OPENAI_SAFETY_BOUNDARY =
   "Model output is advisory and must never decide whether behavior changed or whether a gate blocks.";
+const MODEL_REQUEST_TIMEOUT_MS = 12_000;
+
+async function withModelTimeout<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const signal = AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS);
+  return Promise.race([
+    request(signal),
+    new Promise<never>((_, reject) =>
+      signal.addEventListener("abort", () => reject(new Error("OpenAI request timed out")), {
+        once: true,
+      }),
+    ),
+  ]);
+}
 
 export const advisoryModelResultSchema = z
   .object({
@@ -133,14 +146,19 @@ async function runAdvisory<T>(options: {
   if (options.input.receiptIds.length === 0)
     throw new Error("At least one cited receipt is required");
   const client = options.client ?? createOpenAIClient();
-  const response = (await client.responses.parse({
-    model: options.model ?? "gpt-5.6",
-    store: false,
-    reasoning: { effort: "low" },
-    instructions: `${OPENAI_SAFETY_BOUNDARY} Use only supplied redacted evidence. Cite receipt IDs exactly. Abstain when evidence is insufficient. ${options.instructions}`,
-    input: JSON.stringify(options.input),
-    text: { format: zodTextFormat(options.schema, options.formatName) },
-  })) as ParsedResponse<T>;
+  const response = (await withModelTimeout((signal) =>
+    client.responses.parse(
+      {
+        model: options.model ?? "gpt-5.6",
+        store: false,
+        reasoning: { effort: "low" },
+        instructions: `${OPENAI_SAFETY_BOUNDARY} Use only supplied redacted evidence. Cite receipt IDs exactly. Abstain when evidence is insufficient. ${options.instructions}`,
+        input: JSON.stringify(options.input),
+        text: { format: zodTextFormat(options.schema, options.formatName) },
+      },
+      { signal },
+    ),
+  )) as ParsedResponse<T>;
   if (!response.output_parsed) throw new Error("OpenAI returned no structured advisory result");
   const result = options.schema.parse(response.output_parsed);
   validateReceiptCitations(result, options.input.receiptIds);
@@ -264,7 +282,7 @@ export interface SpecDraftResult {
 
 export function createOpenAIClient(apiKey = process.env.OPENAI_API_KEY): OpenAI {
   if (!apiKey) throw new Error("OPENAI_API_KEY is required for model-assisted operations");
-  return new OpenAI({ apiKey, timeout: 12_000, maxRetries: 0 });
+  return new OpenAI({ apiKey, timeout: MODEL_REQUEST_TIMEOUT_MS, maxRetries: 0 });
 }
 
 export async function draftOpenApiChange(
@@ -278,19 +296,24 @@ export async function draftOpenApiChange(
   if (input.redactedEvidence.length === 0) throw new Error("Redacted evidence is required");
   const client = options.client ?? createOpenAIClient();
   const model = options.model ?? "gpt-5.6";
-  const response = (await client.responses.parse({
-    model,
-    store: false,
-    reasoning: { effort: "low" },
-    instructions: [
-      "Draft an advisory OpenAPI 3.1 change that documents one observed accidental contract.",
-      "Use only the supplied redacted evidence and cite receipt IDs exactly.",
-      "Do not claim that a behavior changed, decide a gate, invent payload values, or include secrets.",
-      "Abstain when the evidence is insufficient to draft a precise schema change.",
-    ].join(" "),
-    input: JSON.stringify(input),
-    text: { format: zodTextFormat(specDraftSchema, "hyrum_spec_draft_v1") },
-  })) as ParsedResponse<SpecDraft>;
+  const response = (await withModelTimeout((signal) =>
+    client.responses.parse(
+      {
+        model,
+        store: false,
+        reasoning: { effort: "low" },
+        instructions: [
+          "Draft an advisory OpenAPI 3.1 change that documents one observed accidental contract.",
+          "Use only the supplied redacted evidence and cite receipt IDs exactly.",
+          "Do not claim that a behavior changed, decide a gate, invent payload values, or include secrets.",
+          "Abstain when the evidence is insufficient to draft a precise schema change.",
+        ].join(" "),
+        input: JSON.stringify(input),
+        text: { format: zodTextFormat(specDraftSchema, "hyrum_spec_draft_v1") },
+      },
+      { signal },
+    ),
+  )) as ParsedResponse<SpecDraft>;
 
   if (!response.output_parsed) throw new Error("OpenAI returned no structured spec draft");
   const result = specDraftSchema.parse(response.output_parsed);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clusterAndNameBehaviors,
   createOpenAIClient,
@@ -18,11 +18,35 @@ const input: SpecDraftInput = {
   redactedEvidence: ["response.next_cursor hash equals later request.query.cursor hash"],
 };
 
+afterEach(() => vi.restoreAllMocks());
+
 describe("OpenAI advisory boundary", () => {
   it("fails fast instead of retrying a stalled model request", () => {
     const client = createOpenAIClient("test-key");
     expect(client.timeout).toBe(12_000);
     expect(client.maxRetries).toBe(0);
+  });
+
+  it("keeps the deadline active through response parsing", async () => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const client = {
+      responses: {
+        parse: async (_body: unknown, options?: { signal?: AbortSignal | null }) => {
+          expect(options?.signal).toBe(controller.signal);
+          return new Promise<never>(() => undefined);
+        },
+      },
+    };
+
+    const request = clusterAndNameBehaviors(
+      { receiptIds: ["receipt-1"], redactedEvidence: [], behaviors: [] },
+      { client: client as never },
+    );
+    controller.abort();
+
+    await expect(request).rejects.toThrow("OpenAI request timed out");
+    expect(timeout).toHaveBeenCalledWith(12_000);
   });
 
   it("accepts a structured draft that cites only supplied receipts", async () => {

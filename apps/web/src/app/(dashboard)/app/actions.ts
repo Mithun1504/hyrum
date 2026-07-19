@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { type SpecDraft, specDraftResponseSchema } from "@hyrum/contracts";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -47,6 +48,7 @@ const policyInputSchema = z.object({
 });
 
 const digestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/, "Use a sha256: digest.");
+const MAX_CORPUS_ARTIFACT_BYTES = 3 * 1024 * 1024;
 const createCorpusSchema = z.object({
   version: z.string().trim().min(1).max(80),
   digest: digestSchema,
@@ -73,36 +75,28 @@ export type MutationState = {
   message: string;
 };
 
-export type CorpusUploadPreparation =
+export type CorpusArtifactUpload =
   | {
       status: "success";
       objectKey: string;
       digest: string;
-      uploadUrl: string;
-      headers: Record<string, string>;
     }
   | { status: "error"; message: string };
 
-export async function prepareCorpusUploadAction(input: {
-  digest: string;
-  sizeBytes: number;
-  contentType: string;
-}): Promise<CorpusUploadPreparation> {
-  const parsed = z
-    .object({
-      digest: digestSchema,
-      sizeBytes: z
-        .number()
-        .int()
-        .positive()
-        .max(100 * 1024 * 1024),
-      contentType: z.string().min(1).max(200),
-    })
-    .safeParse(input);
-  if (!parsed.success) {
+export async function uploadCorpusArtifactAction(
+  formData: FormData,
+): Promise<CorpusArtifactUpload> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
     return {
       status: "error",
-      message: parsed.error.issues[0]?.message ?? "Invalid artifact.",
+      message: "Choose a non-empty artifact to upload.",
+    };
+  }
+  if (file.size > MAX_CORPUS_ARTIFACT_BYTES) {
+    return {
+      status: "error",
+      message: "Artifact uploads are limited to 3 MB.",
     };
   }
   try {
@@ -112,22 +106,29 @@ export async function prepareCorpusUploadAction(input: {
         status: "error",
         message: "Your session expired. Sign in again.",
       };
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
     const result = await createControlPlane(accessToken).prepareCorpusUpload({
-      sha256: parsed.data.digest,
-      size_bytes: parsed.data.sizeBytes,
-      content_type: parsed.data.contentType,
+      sha256: digest,
+      size_bytes: file.size,
+      content_type: file.type || "application/octet-stream",
     });
+    const response = await fetch(result.upload_url, {
+      method: "PUT",
+      headers: result.headers,
+      body: bytes,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) throw new Error(`Object storage returned ${response.status}`);
     return {
       status: "success",
       objectKey: result.object_key,
-      digest: parsed.data.digest,
-      uploadUrl: result.upload_url,
-      headers: result.headers,
+      digest,
     };
-  } catch (error) {
+  } catch {
     return {
       status: "error",
-      message: actionError("Artifact upload could not be prepared", error),
+      message: "Artifact upload failed. Retry the file in a moment.",
     };
   }
 }
