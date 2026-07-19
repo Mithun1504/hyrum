@@ -52,6 +52,8 @@ describe("AssertionsView", () => {
                 behavior_id: selected.behavior_id,
                 claim_id: selected.claim_id,
                 owner_id: "owner_123456789",
+                owner_name: "Nishchay Chandra",
+                behavior_title: "Echoed idempotency key",
                 reason: "Migration review expired.",
                 status: "expired",
                 expires_at: "2026-07-14T08:00:00.000Z",
@@ -75,6 +77,9 @@ describe("AssertionsView", () => {
     expect(screen.getByRole("heading", { name: "Selected assertion" })).toBeVisible();
     expect(screen.getAllByText("Expired").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Migration review expired.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Nishchay Chandra").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Echoed idempotency key").length).toBeGreaterThan(0);
+    expect(screen.queryByText("owner_12")).not.toBeInTheDocument();
   });
 });
 

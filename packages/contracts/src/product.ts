@@ -123,6 +123,12 @@ export const assertionSchema = z.object({
 });
 export type Assertion = z.infer<typeof assertionSchema>;
 
+export const assertionListItemSchema = assertionSchema.extend({
+  owner_name: z.string(),
+  behavior_title: z.string(),
+});
+export type AssertionListItem = z.infer<typeof assertionListItemSchema>;
+
 export const resolveAssertionRequestSchema = z
   .discriminatedUnion("resolution", [
     z.object({

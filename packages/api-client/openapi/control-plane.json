@@ -2654,6 +2654,12 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "owner_name": {
+                            "type": "string"
+                          },
+                          "behavior_title": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -2668,7 +2674,9 @@
                           "resolution_reason",
                           "resolved_by",
                           "resolved_at",
-                          "customer_notice"
+                          "customer_notice",
+                          "owner_name",
+                          "behavior_title"
                         ],
                         "additionalProperties": false
                       }

@@ -1,5 +1,5 @@
 import { ControlPlaneError, type ProgressEventTopic } from "@hyrum/api-client";
-import type { ReplayCorpus, ReplayRunDetailResponse } from "@hyrum/contracts";
+import type { AssertionListItem, ReplayCorpus, ReplayRunDetailResponse } from "@hyrum/contracts";
 import { createControlPlane } from "@/services/control-plane";
 
 export type EvidenceTier = "T1" | "T2" | "T3";
@@ -49,32 +49,7 @@ export type Receipt = {
   expires_at: string;
 };
 
-export type Assertion = {
-  id: string;
-  behavior_id: string;
-  claim_id: string | null;
-  owner_id: string;
-  reason: string;
-  status: "active" | "expired" | "resolved";
-  expires_at: string;
-  resolution_type: "documented" | "extended" | "scheduled_break" | null;
-  resolution_reason: string | null;
-  resolved_by: string | null;
-  resolved_at: string | null;
-  customer_notice: {
-    subject: string;
-    summary: string;
-    body: string;
-    effective_at: string;
-    impacted_consumers: Array<{
-      consumer_id: string;
-      display_alias: string;
-      tier: "T1" | "T2" | "T3";
-      endpoints: string[];
-      observation_count: number | null;
-    }>;
-  } | null;
-};
+export type Assertion = AssertionListItem;
 
 export type GatePolicy = {
   id: string;

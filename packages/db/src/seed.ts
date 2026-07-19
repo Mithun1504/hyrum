@@ -118,9 +118,10 @@ function seedRole() {
 const now = new Date();
 const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000);
 const daysFromNow = (days: number) => new Date(now.getTime() + days * 86_400_000);
-const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const corpusObjectKey = (character: string) =>
-  `organizations/${organizationId}/corpus/sha256/${character.repeat(64)}`;
+const digest = (payload: string) =>
+  `sha256:${createHash("sha256").update(`hyrum-seed:${payload}`).digest("hex")}`;
+const corpusObjectKey = (payload: string) =>
+  `organizations/${organizationId}/corpus/sha256/${digest(payload).slice(7)}`;
 const seedAgentToken =
   process.env.HYRUM_SEED_AGENT_TOKEN ?? "hyrum_seedagent_seed-development-token-0001";
 const signingPublicKey = process.env.HYRUM_SEED_SIGNING_PUBLIC_KEY;
@@ -211,7 +212,7 @@ try {
       organizationId,
       version: "2026-07-seed",
       objectKey: `${organizationId}/api-specs/seed-openapi.json`,
-      digest: digest("1"),
+      digest: digest("openapi:orders-v1"),
       normalized: {
         openapi: "3.1.0",
         info: { title: "Seed Orders API", version: "1.0.0" },
@@ -394,7 +395,7 @@ try {
       behaviorFixtures.map((fixture, index) => ({
         id: required(ids.behavior, index),
         organizationId,
-        fingerprintDigest: digest(String(index + 2)),
+        fingerprintDigest: digest(`behavior:${fixture.key}:${fixture.path}`),
         kind: fixture.kind,
         extractorVersion: "extractor-go-seed-v1",
         fingerprint: {
@@ -431,7 +432,7 @@ try {
                 operationId: required(ids.operation, fixture.operationIndex),
                 captureSessionId: required(ids.session, fixture.sessionIndex),
                 objectKey: `${organizationId}/receipts/seed-${index + 1}.json`,
-                digest: digest(["6", "7", "8"][index] ?? "6"),
+                digest: digest(`receipt:${fixture.key}:${JSON.stringify(fixture.receiptExcerpt)}`),
                 redactionVersion: "redaction-v1",
                 sequenceStart: index * 10 + 1,
                 sequenceEnd: index * 10 + 3,
@@ -545,11 +546,11 @@ try {
       id: ids.corpus,
       organizationId,
       version: "HYR-PR-184",
-      digest: digest("9"),
-      objectKey: corpusObjectKey("9"),
-      fixtureDigest: digest("c"),
-      fixtureObjectKey: corpusObjectKey("c"),
-      stubsObjectKey: corpusObjectKey("d"),
+      digest: digest("corpus:HYR-PR-184"),
+      objectKey: corpusObjectKey("corpus:HYR-PR-184"),
+      fixtureDigest: digest("fixture:orders-v1"),
+      fixtureObjectKey: corpusObjectKey("fixture:orders-v1"),
+      stubsObjectKey: corpusObjectKey("stubs:orders-v1"),
       curationStatus: "ready",
       createdBy: userId,
     });
@@ -561,8 +562,8 @@ try {
         operationId: required(ids.operation, fixture.operationIndex),
         consumerId: required(ids.consumer, fixture.consumerIndex),
         coverageClass: index === 0 ? "T1" : index === 1 ? "T2" : "exposure",
-        objectKey: corpusObjectKey(["a", "b", "c", "d"][index] ?? "a"),
-        digest: digest(["a", "b", "c", "d"][index] ?? "a"),
+        objectKey: corpusObjectKey(`case:${fixture.key}`),
+        digest: digest(`case:${fixture.key}`),
         priority: index + 1,
         enabled: true,
         requestMetadata: {
@@ -577,18 +578,18 @@ try {
       reportVersion: "1",
       baseUrl: "https://base.seed.example.test",
       candidateUrl: "https://candidate.seed.example.test",
-      baseImageDigest: digest("a"),
-      candidateImageDigest: digest("b"),
+      baseImageDigest: digest("image:orders-api-base"),
+      candidateImageDigest: digest("image:orders-api-candidate"),
       extractorVersion: "extractor-go-seed-v1",
-      corpusDigest: digest("9"),
-      fixtureDigest: digest("c"),
-      maskDigest: digest("d"),
+      corpusDigest: digest("corpus:HYR-PR-184"),
+      fixtureDigest: digest("fixture:orders-v1"),
+      maskDigest: digest("mask:redaction-v1"),
       runnerVersion: "runner-seed-v1",
       policyId: ids.policy,
       policyVersion: 1,
       runs: 3,
       outcome: "block",
-      reportDigest: digest("e"),
+      reportDigest: digest("report:HYR-PR-184:block"),
       signatureKeyId: ids.agent,
       signatureVerified: true,
       generatedAt: hoursAgo(1),
@@ -602,7 +603,9 @@ try {
           caseId: `seed-${fixture.key}-case`,
           kind: fixture.kind,
           path: fixture.path,
-          digest: digest(["f", "0", "1"][index] ?? "f"),
+          digest: digest(
+            `delta:${fixture.key}:${JSON.stringify([fixture.replayBefore, fixture.replayAfter])}`,
+          ),
           stable: true,
           quarantined: false,
           before: fixture.replayBefore,
@@ -715,8 +718,8 @@ try {
       schemaVersion: "1",
       responseId: "resp_seed",
       status: "completed",
-      inputDigest: digest("2"),
-      resultDigest: digest("3"),
+      inputDigest: digest("llm:seed-label-input"),
+      resultDigest: digest("llm:seed-label-result"),
       tokenUsage: { input_tokens: 128, output_tokens: 32 },
       result: { label: "Echoed idempotency key", advisory: true },
     });

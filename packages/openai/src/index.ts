@@ -136,7 +136,7 @@ async function runAdvisory<T>(options: {
   const response = (await client.responses.parse({
     model: options.model ?? "gpt-5.6",
     store: false,
-    reasoning: { effort: "medium" },
+    reasoning: { effort: "low" },
     instructions: `${OPENAI_SAFETY_BOUNDARY} Use only supplied redacted evidence. Cite receipt IDs exactly. Abstain when evidence is insufficient. ${options.instructions}`,
     input: JSON.stringify(options.input),
     text: { format: zodTextFormat(options.schema, options.formatName) },
@@ -264,7 +264,7 @@ export interface SpecDraftResult {
 
 export function createOpenAIClient(apiKey = process.env.OPENAI_API_KEY): OpenAI {
   if (!apiKey) throw new Error("OPENAI_API_KEY is required for model-assisted operations");
-  return new OpenAI({ apiKey, timeout: 20_000, maxRetries: 2 });
+  return new OpenAI({ apiKey, timeout: 12_000, maxRetries: 0 });
 }
 
 export async function draftOpenApiChange(
@@ -281,7 +281,7 @@ export async function draftOpenApiChange(
   const response = (await client.responses.parse({
     model,
     store: false,
-    reasoning: { effort: "medium" },
+    reasoning: { effort: "low" },
     instructions: [
       "Draft an advisory OpenAPI 3.1 change that documents one observed accidental contract.",
       "Use only the supplied redacted evidence and cite receipt IDs exactly.",

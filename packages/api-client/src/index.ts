@@ -1,5 +1,6 @@
 import {
   apiSpecSchema,
+  assertionListItemSchema,
   assertionSchema,
   type CaptureBatch,
   type CreateCorpusItemRequest,
@@ -74,7 +75,7 @@ function withQuery(path: string, query: Record<string, string | number | undefin
   return suffix ? `${path}?${suffix}` : path;
 }
 
-const assertionListSchema = z.object({ assertions: z.array(assertionSchema) });
+const assertionListSchema = z.object({ assertions: z.array(assertionListItemSchema) });
 const corpusListSchema = z.object({ corpora: z.array(replayCorpusSchema) });
 const advisoryResponseSchema = z.object({
   role: z.enum(["behavior_clusters", "tier_proposals", "replay_priorities", "impact_explanations"]),
@@ -270,6 +271,7 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions) {
       const response = await request(`/v1/model-assistance/${role}`, {
         method: "POST",
         body: jsonBody({ entity_ids: entityIds }),
+        signal: AbortSignal.timeout(15_000),
       });
       return advisoryResponseSchema.parse(await response.json());
     },

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  assertionListItemSchema,
   assertionSchema,
   type PinAssertionRequest,
   pinAssertionRequestSchema,
@@ -22,6 +23,7 @@ import {
   progressEvents,
   receiptIsUnexpired,
   receipts,
+  users,
   withTenant,
 } from "@hyrum/db";
 import { draftCustomerNotice } from "@hyrum/openai";
@@ -30,7 +32,7 @@ import { z } from "zod";
 import { sha256Hex } from "../../domain/security";
 import { asIso, requireContext } from "./helpers";
 
-const assertionListSchema = z.object({ assertions: z.array(assertionSchema) });
+const assertionListSchema = z.object({ assertions: z.array(assertionListItemSchema) });
 const assertionParamsSchema = z.object({ id: z.uuid() });
 
 function serializeAssertion(row: typeof assertions.$inferSelect) {
@@ -47,6 +49,20 @@ function serializeAssertion(row: typeof assertions.$inferSelect) {
     resolved_by: row.resolvedBy,
     resolved_at: row.resolvedAt ? asIso(row.resolvedAt) : null,
     customer_notice: row.customerNotice,
+  });
+}
+
+function serializeAssertionListItem(row: {
+  assertion: typeof assertions.$inferSelect;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  behaviorLabel: string | null;
+  behaviorKind: (typeof behaviorDefinitions.$inferSelect)["kind"];
+}) {
+  return assertionListItemSchema.parse({
+    ...serializeAssertion(row.assertion),
+    owner_name: row.ownerName ?? row.ownerEmail ?? "Former member",
+    behavior_title: row.behaviorLabel ?? `Unlabeled ${row.behaviorKind} behavior`,
   });
 }
 
@@ -70,14 +86,28 @@ export const assertionRoutes: FastifyPluginAsyncZod = async (app) => {
       const context = requireContext(app, request.authContext);
       const rows = await withTenant(app.database.db, context.organizationId, (tx) =>
         tx
-          .select()
+          .select({
+            assertion: assertions,
+            ownerName: users.displayName,
+            ownerEmail: users.email,
+            behaviorLabel: behaviorDefinitions.label,
+            behaviorKind: behaviorDefinitions.kind,
+          })
           .from(assertions)
+          .leftJoin(users, eq(users.id, assertions.ownerId))
+          .innerJoin(
+            behaviorDefinitions,
+            and(
+              eq(behaviorDefinitions.organizationId, assertions.organizationId),
+              eq(behaviorDefinitions.id, assertions.behaviorId),
+            ),
+          )
           .where(eq(assertions.organizationId, context.organizationId))
           .orderBy(desc(assertions.expiresAt))
           .limit(100),
       );
       return {
-        assertions: rows.map(serializeAssertion),
+        assertions: rows.map(serializeAssertionListItem),
       };
     },
   );

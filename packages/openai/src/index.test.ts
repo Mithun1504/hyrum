@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clusterAndNameBehaviors,
+  createOpenAIClient,
   deterministicSpecDraftFallback,
   draftOpenApiChange,
   proposeEvidenceTiers,
@@ -18,6 +19,12 @@ const input: SpecDraftInput = {
 };
 
 describe("OpenAI advisory boundary", () => {
+  it("fails fast instead of retrying a stalled model request", () => {
+    const client = createOpenAIClient("test-key");
+    expect(client.timeout).toBe(12_000);
+    expect(client.maxRetries).toBe(0);
+  });
+
   it("accepts a structured draft that cites only supplied receipts", async () => {
     const client = {
       responses: {

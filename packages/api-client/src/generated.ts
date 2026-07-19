@@ -1062,6 +1062,8 @@ export interface paths {
                     observation_count: number | null;
                   }[];
                 } | null;
+                owner_name: string;
+                behavior_title: string;
               }[];
             };
           };

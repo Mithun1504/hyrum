@@ -137,8 +137,10 @@ const server = createServer(async (request, response) => {
     const assertion = {
       id: randomUUID(),
       behavior_id: body.behavior_id,
+      behavior_title: "Echoed idempotency key",
       claim_id: body.claim_id ?? null,
       owner_id: "20000000-0000-4000-8000-000000000001",
+      owner_name: "E2E Engineer",
       reason: body.reason,
       status: "active",
       expires_at: body.expires_at,

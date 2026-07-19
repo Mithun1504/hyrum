@@ -178,11 +178,7 @@ function AssertionDetail({
         {assertion ? <StatusStamp status={assertion.status} /> : null}
       </div>
       <dl className="mt-4 grid gap-3 text-sm">
-        <Fact
-          label="owner"
-          value={assertion ? shortId(assertion.owner_id) : "Not assigned"}
-          mono={Boolean(assertion)}
-        />
+        <Fact label="owner" value={assertion?.owner_name ?? "Not assigned"} />
         <Fact
           label="reason"
           value={assertion?.reason ?? "Select a ledger behavior, then pin it."}
@@ -286,16 +282,14 @@ function AssertionRow({ assertion, selected }: { assertion: Assertion; selected:
     <article className={cn("grid gap-3 p-4", selected && "bg-secondary")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold" title={assertion.owner_id}>
-            owner {shortId(assertion.owner_id)}
-          </div>
+          <div className="text-sm font-semibold">{assertion.owner_name}</div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{assertion.reason}</p>
         </div>
         <StatusStamp status={assertion.status} />
       </div>
       <dl className="grid grid-cols-2 gap-3 text-xs">
         <Fact label="expires" value={formatDate(assertion.expires_at)} />
-        <Fact label="behavior" value={shortId(assertion.behavior_id)} mono />
+        <Fact label="behavior" value={assertion.behavior_title} />
       </dl>
     </article>
   );
