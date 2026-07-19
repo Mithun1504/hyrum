@@ -23,6 +23,7 @@ import {
   progressEvents,
   receiptIsUnexpired,
   receipts,
+  sql,
   users,
   withTenant,
 } from "@hyrum/db";
@@ -94,7 +95,7 @@ export const assertionRoutes: FastifyPluginAsyncZod = async (app) => {
             behaviorKind: behaviorDefinitions.kind,
           })
           .from(assertions)
-          .leftJoin(users, eq(users.id, assertions.ownerId))
+          .leftJoin(users, eq(sql<string>`${users.id}::text`, assertions.ownerId))
           .innerJoin(
             behaviorDefinitions,
             and(
