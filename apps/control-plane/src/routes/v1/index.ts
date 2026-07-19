@@ -41,7 +41,8 @@ export const v1Routes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) => {
       if (!request.authContext) throw app.httpErrors.unauthorized();
-      return request.authContext;
+      const { actorId, organizationId, role } = request.authContext;
+      return { actorId, organizationId, role };
     },
   );
 
