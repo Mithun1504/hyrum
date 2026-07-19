@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@hyrum/contracts": "workspace:*",
-    "openai": "^6.17.0",
+    "openai": "^6.48.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
