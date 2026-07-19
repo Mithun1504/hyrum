@@ -77,6 +77,21 @@ const server = createServer(async (request, response) => {
       },
     });
   if (url.pathname === "/v1/progress") return send(response, { events: [] });
+  if (url.pathname === "/v1/progress/stream") {
+    response.writeHead(200, {
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+      "content-type": "text/event-stream",
+    });
+    response.write(
+      `id: 1\nevent: capture.batch_ingested\ndata: ${JSON.stringify({
+        resource_id: "batch-e2e",
+        created_at: "2026-07-18T12:00:00.000Z",
+      })}\n\n`,
+    );
+    request.on("close", () => response.end());
+    return;
+  }
   if (url.pathname === "/v1/consumers")
     return send(response, {
       consumers,

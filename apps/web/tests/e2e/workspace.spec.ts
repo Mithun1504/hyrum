@@ -20,6 +20,10 @@ test.describe("workspace", () => {
       /Policy/,
     ]);
 
+    await mainNav.getByRole("link", { name: "01 Capture", exact: true }).click();
+    await expect(page.getByText("Following live")).toBeVisible();
+    await expect(page.getByText("capture · batch ingested")).toBeVisible();
+
     await mainNav.getByRole("link", { name: "02 Ledger", exact: true }).click();
     const t1Row = page.getByText("Echoed idempotency key").locator("xpath=ancestor::tr");
     await t1Row.getByRole("link", { name: "Receipt" }).click();
@@ -163,7 +167,7 @@ test.describe("workspace", () => {
       page.getByText("Receipt-backed behaviors form one compatibility cluster."),
     ).toBeVisible();
     await expect(page.getByText("Echoed request correlation")).toBeVisible();
-    await expect(page.getByText("deterministic boundary")).toBeVisible();
+    await expect(page.getByRole("main").getByText("deterministic boundary")).toBeVisible();
   });
 
   test("renders workspace content after a mobile reload before opening navigation", async ({

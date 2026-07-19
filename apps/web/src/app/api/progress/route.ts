@@ -1,10 +1,10 @@
-import { withAuth } from "@workos-inc/authkit-nextjs";
 import { controlPlaneBaseUrl } from "@/services/control-plane";
+import { dashboardAuth } from "@/services/dashboard-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const { accessToken } = await withAuth({ ensureSignedIn: true });
+  const { accessToken } = await dashboardAuth();
   const requestedId = Number(new URL(request.url).searchParams.get("last_event_id") ?? "0");
   const lastEventId = Number.isSafeInteger(requestedId) && requestedId >= 0 ? requestedId : 0;
   const upstream = await fetch(

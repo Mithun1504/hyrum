@@ -301,10 +301,10 @@ async function runAcceptance() {
     `);
 
     controlPlane = spawn(
-      "pnpm",
-      ["--filter", "@hyrum/control-plane", "exec", "tsx", "src/server.ts"],
+      process.execPath,
+      [resolve(root, "apps/control-plane/node_modules/tsx/dist/cli.mjs"), "src/server.ts"],
       {
-        cwd: root,
+        cwd: resolve(root, "apps/control-plane"),
         env: {
           ...process.env,
           NODE_ENV: "test",
