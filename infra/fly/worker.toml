@@ -1,0 +1,17 @@
+app = "hyrum-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "infra/docker/control-plane.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+[processes]
+  worker = "node worker/dist/index.js"
+
+[[vm]]
+  processes = ["worker"]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

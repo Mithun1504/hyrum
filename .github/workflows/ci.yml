@@ -49,8 +49,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:migrate
       - run: pnpm verify
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      - run: pnpm --filter @hyrum/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @hyrum/web test:e2e
+      - name: Exercise network latency and recovery
+        run: |
+          docker compose --profile resilience up --detach toxiproxy
+          trap 'docker compose --profile resilience stop toxiproxy' EXIT
+          pnpm test:resilience
       - name: Build deploy image
         run: docker build --file infra/docker/control-plane.Dockerfile --tag hyrum-control-plane:ci .
       - name: Smoke control-plane and worker entrypoints
@@ -86,3 +91,39 @@ jobs:
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./cmd/hyrum-agent ./cmd/hyrum-replay
+
+  live-integrations:
+    if: ${{ vars.RUN_LIVE_INTEGRATIONS == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HYRUM_RUN_LIVE_INTEGRATIONS: "1"
+      HYRUM_RUN_LIVE_OPENAI: "1"
+      HYRUM_RUN_LIVE_WORKOS: "1"
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      WORKOS_API_KEY: ${{ secrets.HYRUM_LIVE_WORKOS_API_KEY }}
+      WORKOS_CLIENT_ID: ${{ vars.HYRUM_LIVE_WORKOS_CLIENT_ID }}
+      HYRUM_LIVE_WORKOS_ORGANIZATION_ID: ${{ vars.HYRUM_LIVE_WORKOS_ORGANIZATION_ID }}
+      HYRUM_LIVE_WORKOS_USER_ID: ${{ vars.HYRUM_LIVE_WORKOS_USER_ID }}
+      GITHUB_APP_ID: ${{ secrets.HYRUM_LIVE_GITHUB_APP_ID }}
+      GITHUB_APP_PRIVATE_KEY: ${{ secrets.HYRUM_LIVE_GITHUB_PRIVATE_KEY }}
+      SLACK_BOT_TOKEN: ${{ secrets.HYRUM_LIVE_SLACK_BOT_TOKEN }}
+      HYRUM_LIVE_GITHUB_REPOSITORY: ${{ vars.HYRUM_LIVE_GITHUB_REPOSITORY }}
+      HYRUM_LIVE_GITHUB_INSTALLATION_ID: ${{ vars.HYRUM_LIVE_GITHUB_INSTALLATION_ID }}
+      HYRUM_LIVE_GITHUB_HEAD_SHA: ${{ vars.HYRUM_LIVE_GITHUB_HEAD_SHA }}
+      HYRUM_LIVE_GITHUB_PULL_REQUEST: ${{ vars.HYRUM_LIVE_GITHUB_PULL_REQUEST }}
+      HYRUM_LIVE_SLACK_CHANNEL: ${{ vars.HYRUM_LIVE_SLACK_CHANNEL }}
+      HYRUM_LIVE_DETAILS_URL: ${{ vars.HYRUM_LIVE_DETAILS_URL }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hyrum/integrations test
+      - run: pnpm --filter @hyrum/openai test
+      - run: pnpm --filter @hyrum/control-plane test

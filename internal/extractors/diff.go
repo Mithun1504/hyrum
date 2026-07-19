@@ -19,6 +19,7 @@ func Diff(before, after Fingerprint) []Delta {
 		deltas = append(deltas, makeDelta("status", "$status", before.Status, after.Status))
 	}
 	compareSet("shape", before.Shape, after.Shape, shapeKey, &deltas)
+	compareSet("shape", before.Presence, after.Presence, presenceKey, &deltas)
 	compareSet("ordering", before.Ordering, after.Ordering, orderingKey, &deltas)
 	if !equal(before.Error, after.Error) {
 		path := "$error"
@@ -71,6 +72,7 @@ func makeDelta(kind, path string, before, after any) Delta {
 }
 
 func shapeKey(field ShapeField) string                { return field.Path }
+func presenceKey(pattern PresencePattern) string      { return pattern.Path + "#presence" }
 func orderingKey(ordering OrderingFingerprint) string { return ordering.Path }
 
 func equal(left, right any) bool {

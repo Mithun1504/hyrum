@@ -37,6 +37,9 @@ describe("gate policy contracts", () => {
     expect(() =>
       upsertGatePolicyRequestSchema.parse({ block_tiers: ["T2"], warn_tiers: [] }),
     ).toThrow();
+    expect(() =>
+      upsertGatePolicyRequestSchema.parse({ block_tiers: ["T1"], warn_tiers: ["T1"] }),
+    ).toThrow(/cannot both block and warn/);
   });
 });
 

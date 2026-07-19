@@ -1,5 +1,5 @@
 import { ControlPlaneError, type ProgressEventTopic } from "@hyrum/api-client";
-import type { ReplayRunDetailResponse } from "@hyrum/contracts";
+import type { ReplayCorpus, ReplayRunDetailResponse } from "@hyrum/contracts";
 import { createControlPlane } from "@/services/control-plane";
 
 export type EvidenceTier = "T1" | "T2" | "T3";
@@ -57,6 +57,23 @@ export type Assertion = {
   reason: string;
   status: "active" | "expired" | "resolved";
   expires_at: string;
+  resolution_type: "documented" | "extended" | "scheduled_break" | null;
+  resolution_reason: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  customer_notice: {
+    subject: string;
+    summary: string;
+    body: string;
+    effective_at: string;
+    impacted_consumers: Array<{
+      consumer_id: string;
+      display_alias: string;
+      tier: "T1" | "T2" | "T3";
+      endpoints: string[];
+      observation_count: number | null;
+    }>;
+  } | null;
 };
 
 export type GatePolicy = {
@@ -139,7 +156,12 @@ export type LedgerRow = LedgerEntry & {
 };
 
 export type WorkspaceSummary = {
-  organization: { id: string; name: string; region: string; retention_days: number };
+  organization: {
+    id: string;
+    name: string;
+    region: string;
+    retention_days: number;
+  };
   capture: {
     endpoint_count: number;
     consumer_count: number;
@@ -156,6 +178,9 @@ export type WorkspaceSnapshot = {
   summary: WorkspaceSummary | null;
   permissions: {
     canPinAssertion: boolean;
+    canOverrideClaim: boolean;
+    canManagePolicy: boolean;
+    canManageCorpus: boolean;
     reason: string | null;
   };
   filters: FilterState;
@@ -166,6 +191,7 @@ export type WorkspaceSnapshot = {
   receipt: Receipt | null;
   assertions: Assertion[];
   gatePolicy: GatePolicy | null;
+  replayCorpora: ReplayCorpus[];
   replayReport: ReplayReport | null;
   progressEvents: ProgressEvent[];
   defaultAssertionExpiry: string;
@@ -174,11 +200,21 @@ export type WorkspaceSnapshot = {
 type WorkspaceApi = {
   health(): Promise<{ status: "ok" | "degraded" }>;
   session(): Promise<{ role: WorkspaceSnapshot["role"] }>;
-  listLedger(): Promise<LedgerEntry[]>;
-  listConsumers(): Promise<Consumer[]>;
+  listLedger(query?: {
+    q?: string;
+    tier?: EvidenceTier;
+    kind?: BehaviorKind;
+    state?: LedgerState;
+  }): Promise<{ entries: LedgerEntry[]; next_cursor: null; total: number }>;
+  listConsumers(): Promise<{
+    consumers: Consumer[];
+    next_cursor: null;
+    total: number;
+  }>;
   getReceipt(id: string): Promise<Receipt>;
   listAssertions(): Promise<Assertion[]>;
   getPolicy(): Promise<GatePolicy>;
+  listReplayCorpora(): Promise<ReplayCorpus[]>;
   getLatestReplayRun(): Promise<ReplayRunDetail>;
   getReplayRun?(id: string): Promise<ReplayRunDetail>;
   getWorkspaceSummary(): Promise<WorkspaceSummary>;
@@ -225,10 +261,16 @@ export async function getWorkspaceSnapshot(
     replayResult,
     summaryResult,
     progressResult,
+    corporaResult,
   ] = await Promise.allSettled([
     client.health(),
     client.session(),
-    client.listLedger(),
+    client.listLedger({
+      ...(filters.query ? { q: filters.query } : {}),
+      ...(filters.tier !== "all" ? { tier: filters.tier } : {}),
+      ...(filters.kind !== "all" ? { kind: filters.kind } : {}),
+      ...(filters.state !== "all" ? { state: filters.state } : {}),
+    }),
     client.listConsumers(),
     client.listAssertions(),
     client.getPolicy(),
@@ -237,6 +279,7 @@ export async function getWorkspaceSnapshot(
       : client.getLatestReplayRun(),
     client.getWorkspaceSummary(),
     client.listProgressEvents(20),
+    client.listReplayCorpora(),
   ]);
   const dataErrors = [
     failureMessage("Health", healthResult),
@@ -248,11 +291,12 @@ export async function getWorkspaceSnapshot(
     replayFailureMessage(replayResult, options.replayRunId !== undefined),
     failureMessage("Workspace summary", summaryResult),
     failureMessage("Progress", progressResult),
+    failureMessage("Replay corpora", corporaResult),
   ].filter((message): message is string => message !== null);
-  const liveConsumers = fulfilledValue(consumersResult) ?? [];
-  const liveRows = (fulfilledValue(ledgerResult) ?? []).map(toLedgerRow);
-  const selectedRows = filterLedgerRows(filters, liveRows);
-  const selected = liveRows.find((row) => row.id === filters.selectedId) ?? selectedRows[0] ?? null;
+  const liveConsumers = fulfilledValue(consumersResult)?.consumers ?? [];
+  const liveRows = (fulfilledValue(ledgerResult)?.entries ?? []).map(toLedgerRow);
+  const selectedRows = liveRows;
+  const selected = liveRows.find((row) => row.id === filters.selectedId) ?? liveRows[0] ?? null;
   let receipt: Receipt | null = null;
 
   if (selected?.receipt_id) {
@@ -277,6 +321,8 @@ export async function getWorkspaceSnapshot(
   const session = fulfilledValue(sessionResult);
   const canPinAssertion =
     session?.role === "owner" || session?.role === "admin" || session?.role === "engineer";
+  const canOverrideClaim = canPinAssertion;
+  const canManagePolicy = session?.role === "owner" || session?.role === "admin";
 
   return {
     apiStatus,
@@ -286,6 +332,9 @@ export async function getWorkspaceSnapshot(
     summary: fulfilledValue(summaryResult),
     permissions: {
       canPinAssertion,
+      canOverrideClaim,
+      canManagePolicy,
+      canManageCorpus: canPinAssertion,
       reason: canPinAssertion ? null : "Your Hyrum organization role cannot pin assertions.",
     },
     filters,
@@ -296,6 +345,7 @@ export async function getWorkspaceSnapshot(
     receipt,
     assertions: fulfilledValue(assertionsResult) ?? [],
     gatePolicy: fulfilledValue(policyResult),
+    replayCorpora: fulfilledValue(corporaResult) ?? [],
     replayReport: toReplayReport(fulfilledValue(replayResult), liveRows),
     progressEvents: fulfilledValue(progressResult) ?? [],
     defaultAssertionExpiry: new Date(Date.now() + 90 * 86_400_000).toISOString(),
@@ -392,25 +442,4 @@ function isNotFound(error: unknown) {
 function safeErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : "Control plane request failed";
   return message.replace(/[\r\n]+/g, " ").slice(0, 240);
-}
-
-function filterLedgerRows(filters: FilterState, rows: LedgerRow[]) {
-  const query = filters.query.toLowerCase();
-  return rows.filter((row) => {
-    const matchesQuery =
-      query.length === 0 ||
-      [
-        row.title,
-        row.endpoint,
-        row.consumer_alias,
-        row.consumer_stable_id,
-        row.evidence_summary,
-      ].some((value) => value.toLowerCase().includes(query));
-    return (
-      matchesQuery &&
-      (filters.tier === "all" || row.tier === filters.tier) &&
-      (filters.kind === "all" || row.kind === filters.kind) &&
-      (filters.state === "all" || row.state === filters.state)
-    );
-  });
 }

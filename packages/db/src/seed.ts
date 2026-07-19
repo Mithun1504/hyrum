@@ -101,6 +101,8 @@ const now = new Date();
 const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000);
 const daysFromNow = (days: number) => new Date(now.getTime() + days * 86_400_000);
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
+const corpusObjectKey = (character: string) =>
+  `organizations/${ids.organization}/corpus/sha256/${character.repeat(64)}`;
 const seedAgentToken =
   process.env.HYRUM_SEED_AGENT_TOKEN ?? "hyrum_seedagent_seed-development-token-0001";
 const signingPublicKey = process.env.HYRUM_SEED_SIGNING_PUBLIC_KEY;
@@ -170,7 +172,10 @@ try {
       version: "2026-07-seed",
       objectKey: `${ids.organization}/api-specs/seed-openapi.json`,
       digest: digest("1"),
-      normalized: { openapi: "3.1.0", info: { title: "Seed Orders API", version: "1.0.0" } },
+      normalized: {
+        openapi: "3.1.0",
+        info: { title: "Seed Orders API", version: "1.0.0" },
+      },
       active: true,
       uploadedBy: ids.user,
     });
@@ -408,8 +413,15 @@ try {
         tier,
         state: required(states, index),
         confidence: [100, 82, 35, 20][index] ?? 0,
-        evidence: { observation_count: [24, 11, 5, 2][index], deterministic: tier === "T1" },
+        evidence: {
+          observation_count: [24, 11, 5, 2][index],
+          deterministic: tier === "T1",
+        },
         receiptId: index < 3 ? required(ids.receipt, index) : null,
+        humanOverrideTier: index === 3 ? ("T2" as const) : null,
+        overriddenBy: index === 3 ? ids.user : null,
+        overrideReason: index === 3 ? "Seeded human promotion for migration review." : null,
+        overriddenAt: index === 3 ? hoursAgo(2) : null,
       })),
     );
     await tx.insert(ledgerEntries).values(
@@ -420,7 +432,7 @@ try {
         behaviorId: required(ids.behavior, index),
         consumerId: required(ids.consumer, required(behaviorFixtures, index).consumerIndex),
         operationId: required(ids.operation, required(behaviorFixtures, index).operationIndex),
-        tier,
+        tier: index === 3 ? ("T2" as const) : tier,
         state: required(states, index),
         title: required(behaviorFixtures, index).title,
         lastSeenAt: hoursAgo(index + 1),
@@ -459,6 +471,25 @@ try {
         reason: "Exposure was reviewed and deliberately removed.",
         status: "resolved",
         expiresAt: daysFromNow(30),
+        resolutionType: "scheduled_break",
+        resolutionReason: "The replacement field has been documented and communicated.",
+        resolvedBy: ids.user,
+        resolvedAt: hoursAgo(6),
+        customerNotice: {
+          subject: "Planned compatibility change",
+          summary: "The legacy field will be removed after the migration window.",
+          body: "Update integrations to the documented replacement before the scheduled date.",
+          effective_at: daysFromNow(30).toISOString(),
+          impacted_consumers: [
+            {
+              consumer_id: ids.consumer[2],
+              display_alias: "Warehouse sync",
+              tier: "T3",
+              endpoints: ["GET /inventory/{id}"],
+              observation_count: 5,
+            },
+          ],
+        },
       },
     ]);
 
@@ -475,7 +506,12 @@ try {
       organizationId: ids.organization,
       version: "seed-v1",
       digest: digest("9"),
-      objectKey: `${ids.organization}/corpora/seed-v1.json`,
+      objectKey: corpusObjectKey("9"),
+      fixtureDigest: digest("c"),
+      fixtureObjectKey: corpusObjectKey("c"),
+      stubsObjectKey: corpusObjectKey("d"),
+      curationStatus: "ready",
+      createdBy: ids.user,
     });
     await tx.insert(corpusItems).values(
       behaviorFixtures.map((fixture, index) => ({
@@ -485,8 +521,14 @@ try {
         operationId: required(ids.operation, fixture.operationIndex),
         consumerId: required(ids.consumer, fixture.consumerIndex),
         coverageClass: index === 0 ? "T1" : index === 1 ? "T2" : "exposure",
-        objectKey: `${ids.organization}/corpora/seed-${fixture.key}.json`,
+        objectKey: corpusObjectKey(["a", "b", "c", "d"][index] ?? "a"),
         digest: digest(["a", "b", "c", "d"][index] ?? "a"),
+        priority: index + 1,
+        enabled: true,
+        requestMetadata: {
+          method: required(ids.operation, fixture.operationIndex),
+          safe: true,
+        },
       })),
     );
     await tx.insert(replayRuns).values({

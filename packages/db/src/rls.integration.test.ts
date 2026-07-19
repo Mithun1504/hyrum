@@ -99,7 +99,12 @@ describeWithDatabase("runtime row-level security", () => {
     `;
     expect(role).toMatchObject({ rolsuper: false, rolbypassrls: false });
 
-    const queuedJobs = await worker`SELECT organization_id FROM jobs ORDER BY organization_id`;
+    const queuedJobs = await worker`
+      SELECT organization_id
+      FROM jobs
+      WHERE organization_id IN (${organizationA}, ${organizationB})
+      ORDER BY organization_id
+    `;
     expect(queuedJobs.map((row) => row.organization_id)).toEqual([organizationA, organizationB]);
   });
 
@@ -121,6 +126,11 @@ describeWithDatabase("runtime row-level security", () => {
     await expect(
       admin`INSERT INTO gate_policies (organization_id, version, block_tiers, warn_tiers)
         VALUES (${organizationA}, 1, ARRAY['T2']::text[], ARRAY[]::text[])`,
+    ).rejects.toMatchObject({ code: "23514" });
+
+    await expect(
+      admin`INSERT INTO gate_policies (organization_id, version, block_tiers, warn_tiers)
+        VALUES (${organizationA}, 2, ARRAY['T1']::text[], ARRAY['T1']::text[])`,
     ).rejects.toMatchObject({ code: "23514" });
   });
 });

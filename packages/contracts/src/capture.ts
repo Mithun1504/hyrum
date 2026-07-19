@@ -168,15 +168,45 @@ export type CaptureInputEvent = z.infer<typeof captureInputEventSchema>;
 
 export const behaviorFingerprintSchema = z
   .object({
-    version: captureContractVersionSchema,
+    version: z.enum(["1.0.0", "1.1.0"]),
     status: z.number().int().min(100).max(599),
     shape: z.array(z.object({ path: z.string(), type: z.string() }).strict()),
+    presence: z
+      .array(
+        z
+          .object({
+            path: z.string(),
+            states: z.array(z.enum(["absent", "null", "present"])).min(1),
+          })
+          .strict(),
+      )
+      .optional(),
+    enums: z
+      .array(
+        z
+          .object({
+            path: z.string(),
+            values: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(32),
+            truncated: z.boolean().optional(),
+          })
+          .strict(),
+      )
+      .optional(),
     error: z
       .object({ status: z.number().int(), template: z.string(), digest: z.string().min(1) })
       .strict()
       .optional(),
     ordering: z
-      .array(z.object({ path: z.string(), values: z.array(z.string()) }).strict())
+      .array(
+        z
+          .object({
+            path: z.string(),
+            values: z.array(z.string()),
+            cross_page_stable: z.boolean().optional(),
+            page_samples: z.number().int().positive().optional(),
+          })
+          .strict(),
+      )
       .optional(),
     masking: z.array(z.string()).optional(),
   })

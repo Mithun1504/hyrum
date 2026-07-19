@@ -54,6 +54,15 @@ services:
       - ./infra/wiremock:/home/wiremock
     command: ["--global-response-templating", "--verbose"]
 
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    profiles: ["resilience"]
+    ports:
+      - "8474:8474"
+      - "18766:18766"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   demo-api-base:
     build:
       context: .

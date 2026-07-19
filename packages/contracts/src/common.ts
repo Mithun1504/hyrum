@@ -6,6 +6,7 @@ export type OrganizationRole = z.infer<typeof organizationRoleSchema>;
 export const permissionSchema = z.enum([
   "assertion:pin",
   "claim:override",
+  "corpus:manage",
   "integration:manage",
   "ledger:read",
   "policy:manage",
@@ -15,7 +16,7 @@ export type Permission = z.infer<typeof permissionSchema>;
 export const rolePermissions: Readonly<Record<OrganizationRole, readonly Permission[]>> = {
   owner: permissionSchema.options,
   admin: permissionSchema.options,
-  engineer: ["assertion:pin", "claim:override", "ledger:read"],
+  engineer: ["assertion:pin", "claim:override", "corpus:manage", "ledger:read"],
   viewer: ["ledger:read"],
 };
 

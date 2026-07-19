@@ -30,7 +30,7 @@ const operationTemplateArgs = [
   "POST /checkout",
 ].flatMap((template) => ["-operation-template", template]);
 const limitations = [
-  "The Go agent processes all 50,000 fixture events twice; authenticated HTTP ingestion submits a representative 200-event slice covering T1, T2, T3, and hard-negative traffic.",
+  "The full 50,000-event fixture is processed and ingested through authenticated, tenant-scoped capture batches before replay acceptance is evaluated.",
   "WorkOS human authentication is not exercised because the acceptance run has no external WorkOS credentials; machine authentication and tenant scoping are exercised.",
   "OpenAI is not called: model output is advisory and no external API key is required for deterministic capture, replay, or gate decisions.",
   "GitHub and Slack are not contacted; the PRD permits local integration fixtures, which remain covered by their package tests rather than this live acceptance run.",
@@ -146,6 +146,7 @@ async function waitForHealth(child) {
       );
     }
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- loopback-only ephemeral acceptance service
       const response = await fetch(`${controlPlaneUrl}/health`, {
         signal: AbortSignal.timeout(1_000),
       });
@@ -171,9 +172,12 @@ async function stopChild(child) {
 async function apiPost(path, token, body) {
   const response = await fetch(`${controlPlaneUrl}${path}`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(300_000),
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -184,7 +188,7 @@ async function apiPost(path, token, body) {
   return payload;
 }
 
-async function firstFixtureEvents(count) {
+async function fixtureEvents(count) {
   const input = createReadStream(resolve(root, "fixtures/demo/traffic-50000.ndjson.gz")).pipe(
     createGunzip(),
   );
@@ -232,7 +236,9 @@ async function runAcceptance() {
   };
   let controlPlane;
   try {
-    await compose(["down", "--volumes", "--remove-orphans"], { allowedExitCodes: [0] });
+    await compose(["down", "--volumes", "--remove-orphans"], {
+      allowedExitCodes: [0],
+    });
     await run("pnpm", ["demo:seed-traffic"]);
     await run("pnpm", ["demo:evaluate"]);
     const manifest = JSON.parse(
@@ -320,7 +326,7 @@ async function runAcceptance() {
     }
     await waitForHealth(controlPlane);
 
-    const representativeInput = await firstFixtureEvents(200);
+    const fullFixtureInput = await fixtureEvents(50_000);
     const captured = await run(
       "./tmp/hyrum-agent",
       ["-organization-id", organizationId, "-input", "-", "-output", "-", ...operationTemplateArgs],
@@ -331,22 +337,46 @@ async function runAcceptance() {
             .digest("hex")
             .slice(0, 32),
         },
-        input: representativeInput,
+        input: fullFixtureInput,
       },
     );
     const captureEvents = captured.stdout.split("\n").filter(Boolean).map(JSON.parse);
-    const captureResponse = await apiPost("/v1/capture/batches", token, {
-      batch_id: "demo-acceptance-representative-v2",
-      events: captureEvents,
-    });
-    if (captureResponse.rejected_count !== 0 || captureResponse.accepted_count !== 200) {
+    const captureResponses = [];
+    const liveBatchSize = 200;
+    const concurrentBatches = 1;
+    for (
+      let windowOffset = 0;
+      windowOffset < captureEvents.length;
+      windowOffset += liveBatchSize * concurrentBatches
+    ) {
+      const window = Array.from({ length: concurrentBatches }, (_, index) => {
+        const offset = windowOffset + index * liveBatchSize;
+        if (offset >= captureEvents.length) return undefined;
+        return apiPost("/v1/capture/batches", token, {
+          batch_id: `demo-acceptance-full-v4-${String(offset / liveBatchSize).padStart(3, "0")}`,
+          events: captureEvents.slice(offset, offset + liveBatchSize),
+        });
+      }).filter(Boolean);
+      captureResponses.push(...(await Promise.all(window)));
+    }
+    const captureResponse = captureResponses.reduce(
+      (summary, response) => ({
+        accepted_count: summary.accepted_count + response.accepted_count,
+        rejected_count: summary.rejected_count + response.rejected_count,
+        results: [
+          ...summary.results,
+          ...response.results.filter((item) => item.status === "rejected"),
+        ],
+      }),
+      { accepted_count: 0, rejected_count: 0, results: [] },
+    );
+    if (captureResponse.rejected_count !== 0 || captureResponse.accepted_count !== 50_000) {
       const failureSummary = captureResponse.results
-        .filter((item) => item.status === "rejected")
         .slice(0, 3)
         .map((item) => `${item.code ?? "rejected"}: ${item.error ?? "no detail"}`)
         .join("; ");
       throw new Error(
-        `Capture ingestion accepted ${captureResponse.accepted_count}/200 and rejected ${captureResponse.rejected_count}: ${failureSummary}; control plane: ${controlPlane.diagnostic.trim().slice(0, 2_500)}`,
+        `Capture ingestion accepted ${captureResponse.accepted_count}/50,000 and rejected ${captureResponse.rejected_count}: ${failureSummary}; control plane: ${controlPlane.diagnostic.trim().slice(0, 2_500)}`,
       );
     }
     const claims = JSON.parse(
@@ -468,6 +498,44 @@ async function runAcceptance() {
       ...summarizeReplay(replayReport, replayResponse),
       retry_idempotent: true,
     };
+    if (process.env.HYRUM_RUN_K6 === "1") {
+      const k6ControlPlaneUrl =
+        process.platform === "linux"
+          ? controlPlaneUrl
+          : `http://host.docker.internal:${controlPlanePort}`;
+      const k6NetworkArgs =
+        process.platform === "linux"
+          ? ["--network", "host"]
+          : ["--add-host", "host.docker.internal:host-gateway"];
+      await run("docker", [
+        "run",
+        "--rm",
+        ...k6NetworkArgs,
+        "--volume",
+        `${resolve(root, "tests/load")}:/scripts:ro`,
+        "--env",
+        `HYRUM_CONTROL_PLANE_URL=${k6ControlPlaneUrl}`,
+        "--env",
+        `HYRUM_MACHINE_TOKEN=${token}`,
+        "--env",
+        "HYRUM_CAPTURE_TEMPLATE=/scripts/capture-template.json",
+        "--env",
+        "HYRUM_K6_RATE=5",
+        "--env",
+        "HYRUM_K6_DURATION=5s",
+        "grafana/k6:0.54.0",
+        "run",
+        "/scripts/capture.js",
+      ]);
+      result.phases.load = {
+        executed_against_live_control_plane: true,
+        rate_per_second: 5,
+        duration: "5s",
+        error_rate_threshold: "<1%",
+        p95_latency_threshold_ms: 1000,
+        thresholds_passed: true,
+      };
+    }
     result.status = "passed";
     result.completed_at = new Date().toISOString();
     await writeFile(reportPath, `${JSON.stringify(result, null, 2)}\n`);
@@ -480,9 +548,9 @@ async function runAcceptance() {
     throw error;
   } finally {
     await stopChild(controlPlane);
-    await compose(["down", "--volumes", "--remove-orphans"], { allowedExitCodes: [0] }).catch(
-      () => {},
-    );
+    await compose(["down", "--volumes", "--remove-orphans"], {
+      allowedExitCodes: [0],
+    }).catch(() => {});
   }
 }
 

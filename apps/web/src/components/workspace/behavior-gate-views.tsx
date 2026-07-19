@@ -1,7 +1,9 @@
 import { ArrowLeft, GitCompareArrows } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { overrideClaimAction } from "@/app/(dashboard)/app/actions";
 import { Button } from "@/components/ui/button";
+import { ClaimOverrideForm } from "@/components/workspace/claim-override-form";
 import { OutcomeBadge, TierBadge, TierLegend } from "@/components/workspace/tier-badge";
 import type {
   EvidenceTier,
@@ -58,6 +60,12 @@ export function BehaviorView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
             <TierBadge tier={row.tier} />
           </div>
           <ReceiptEvidence receipt={snapshot.receipt} row={row} />
+          <ClaimOverrideForm
+            claimId={row.claim_id}
+            currentTier={row.tier}
+            canOverride={snapshot.permissions.canOverrideClaim}
+            action={overrideClaimAction}
+          />
         </section>
 
         <section className="min-w-0 rounded-md border border-border bg-card p-4 md:p-6">
@@ -380,7 +388,7 @@ function GateDeltaRow({
           <div key={match.claim_id} className="grid gap-1 py-3">
             <p className="font-medium">Signed replay claim {shortDigest(match.claim_id)}</p>
             <p className="text-muted-foreground">
-              This claim is outside the latest 100 loaded ledger entries. Its tier and receipt stay
+              This claim is outside the current filtered ledger result. Its tier and receipt stay
               unknown in this view; the signed aggregate decision above remains authoritative.
             </p>
           </div>
@@ -665,7 +673,7 @@ function deltaStatus(
       symbol: "?",
       tone: "neutral",
       detail:
-        "The signed replay references a ledger claim outside the latest 100 loaded entries. Its tier is not inferred here.",
+        "The signed replay references a claim outside the current filtered ledger result. Its tier is not inferred here.",
     };
   }
   return {

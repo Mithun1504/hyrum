@@ -142,7 +142,7 @@ export function LedgerView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
     <>
       <PageIntro
         title="Accidental-contract ledger"
-        desc="Review the latest 100 ledger entries returned by the control plane. Counts are behavior × consumer totals; the endpoint is retained context, not a scope boundary."
+        desc="Search and filter the complete retained tenant ledger. Counts are behavior × consumer totals; the endpoint is retained context, not a scope boundary."
       />
       <form className="mb-4 grid gap-3 border border-border bg-card p-4 md:grid-cols-[minmax(180px,1fr)_auto_auto_auto_auto]">
         <input type="hidden" name="view" value="ledger" />

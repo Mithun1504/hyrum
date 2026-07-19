@@ -16,6 +16,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@hyrum/api-client": "workspace:*",
     "@hyrum/contracts": "workspace:*",
+    "@sentry/nextjs": "^10.66.0",
     "@tanstack/react-query": "^5.90.21",
     "@workos-inc/authkit-nextjs": "^4.2.0",
     "class-variance-authority": "^0.7.1",

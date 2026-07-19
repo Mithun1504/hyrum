@@ -250,6 +250,8 @@ export const dependencyClaims = pgTable(
     receiptId: uuid("receipt_id").references(() => receipts.id, { onDelete: "set null" }),
     humanOverrideTier: evidenceTier("human_override_tier"),
     overriddenBy: text("overridden_by"),
+    overrideReason: text("override_reason"),
+    overriddenAt: timestamp("overridden_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -313,6 +315,11 @@ export const assertions = pgTable(
     policy: jsonb("policy").notNull().default({}),
     status: assertionStatus("status").notNull().default("active"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    resolutionType: text("resolution_type"),
+    resolutionReason: text("resolution_reason"),
+    resolvedBy: text("resolved_by"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    customerNotice: jsonb("customer_notice"),
     ...timestamps,
   },
   (table) => [
@@ -332,6 +339,10 @@ export const assertions = pgTable(
     }).onDelete("restrict"),
     index("assertions_org_expires_idx").on(table.organizationId, table.status, table.expiresAt),
     index("assertions_org_behavior_idx").on(table.organizationId, table.behaviorId),
+    check(
+      "assertions_resolution_type_valid",
+      sql`${table.resolutionType} IS NULL OR ${table.resolutionType} IN ('documented', 'extended', 'scheduled_break')`,
+    ),
   ],
 );
 
@@ -345,10 +356,19 @@ export const replayCorpora = pgTable(
     version: text("version").notNull(),
     digest: text("digest").notNull(),
     objectKey: text("object_key").notNull(),
+    fixtureDigest: text("fixture_digest"),
+    fixtureObjectKey: text("fixture_object_key"),
+    stubsObjectKey: text("stubs_object_key"),
+    curationStatus: text("curation_status").notNull().default("draft"),
+    createdBy: text("created_by"),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("replay_corpora_org_digest_unique").on(table.organizationId, table.digest),
+    check(
+      "replay_corpora_curation_status_valid",
+      sql`${table.curationStatus} IN ('draft', 'ready', 'archived')`,
+    ),
   ],
 );
 
@@ -368,6 +388,9 @@ export const corpusItems = pgTable(
     coverageClass: text("coverage_class").notNull(),
     objectKey: text("object_key").notNull(),
     digest: text("digest").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    priority: integer("priority").notNull().default(100),
+    requestMetadata: jsonb("request_metadata").notNull().default({}),
     ...timestamps,
   },
   (table) => [
@@ -377,6 +400,7 @@ export const corpusItems = pgTable(
       table.caseId,
     ),
     index("corpus_items_org_coverage_idx").on(table.organizationId, table.coverageClass),
+    check("corpus_items_priority_positive", sql`${table.priority} > 0`),
   ],
 );
 
@@ -398,6 +422,7 @@ export const gatePolicies = pgTable(
       "gate_policies_block_tiers_t1_only",
       sql`${table.blockTiers} <@ ARRAY['T1']::text[] AND cardinality(${table.blockTiers}) <= 1`,
     ),
+    check("gate_policies_outcomes_disjoint", sql`NOT (${table.blockTiers} && ${table.warnTiers})`),
     uniqueIndex("gate_policies_org_version_unique").on(table.organizationId, table.version),
     index("gate_policies_org_active_idx").on(table.organizationId, table.active),
   ],

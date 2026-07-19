@@ -68,7 +68,14 @@ export const policyRoutes: FastifyPluginAsyncZod = async (app) => {
             ),
           )
           .orderBy(desc(gatePolicies.version))
-          .limit(1);
+          .limit(1)
+          .for("update");
+        if (
+          request.body.expected_version !== undefined &&
+          request.body.expected_version !== (current?.version ?? 0)
+        ) {
+          throw app.httpErrors.conflict("Policy was updated by another administrator");
+        }
         if (current) {
           await tx
             .update(gatePolicies)

@@ -18,10 +18,12 @@ export function WorkspaceShell({
   snapshot,
   view,
   actorLabel,
+  authBypass = false,
 }: {
   snapshot: WorkspaceSnapshot;
   view: ViewKey;
   actorLabel: string;
+  authBypass?: boolean;
 }) {
   const title = workspaceNavItems.find((item) => item.key === view)?.label ?? "Overview";
   const contextualTitle = contextualWorkspaceViews.find((item) => item.key === view)?.label;
@@ -46,6 +48,7 @@ export function WorkspaceShell({
         blockingCount={blockingCount}
         apiStatus={snapshot.apiStatus}
         selectedParam={selectedParam}
+        authBypass={authBypass}
       />
       <main id="workspace-main" className="min-w-0 flex-1 pb-24 md:pb-0" tabIndex={-1}>
         <header className="sticky top-0 z-30 flex min-h-16 items-center gap-4 border-b bg-background/95 px-4 pl-16 md:px-6 xl:px-8">

@@ -50,7 +50,25 @@ function normalizeShapePath(path: string) {
 }
 
 function shapeFingerprint(fingerprint: BehaviorFingerprint, path: string) {
-  return fingerprint.shape.find((field) => normalizeShapePath(field.path) === path) ?? { path };
+  const normalizedPath = normalizeShapePath(path);
+  const shape = fingerprint.shape.find(
+    (field) => normalizeShapePath(field.path) === normalizedPath,
+  );
+  const presence = fingerprint.presence?.find(
+    (field) => normalizeShapePath(field.path) === normalizedPath,
+  );
+  const observedEnum = fingerprint.enums?.find(
+    (field) => normalizeShapePath(field.path) === normalizedPath,
+  );
+
+  return {
+    path: normalizedPath,
+    ...(shape ? { type: shape.type } : {}),
+    ...(presence ? { presence: presence.states } : {}),
+    ...(observedEnum
+      ? { observed_enum: observedEnum.values, enum_truncated: observedEnum.truncated ?? false }
+      : {}),
+  };
 }
 
 function orderingFingerprint(fingerprint: BehaviorFingerprint, path: string) {

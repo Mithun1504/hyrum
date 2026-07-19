@@ -23,6 +23,7 @@ type NavigationProps = {
   blockingCount: number;
   apiStatus: WorkspaceSnapshot["apiStatus"];
   selectedParam: string;
+  authBypass: boolean;
 };
 
 export function WorkspaceNavigation(props: NavigationProps) {
@@ -144,6 +145,7 @@ function SidebarContent({
   blockingCount,
   apiStatus,
   selectedParam,
+  authBypass,
   collapsed,
   onNavigate,
 }: NavigationProps & { collapsed: boolean; onNavigate: () => void }) {
@@ -237,7 +239,7 @@ function SidebarContent({
           <>
             <ThemeToggle />
             <div className="mt-3">
-              <AccountControls label={actorLabel} />
+              <AccountControls label={actorLabel} authBypass={authBypass} />
             </div>
             <span className="mt-1 block text-[10px] capitalize text-muted-foreground">
               {role} role

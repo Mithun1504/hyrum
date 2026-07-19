@@ -1,0 +1,30 @@
+app = "hyrum-control-plane"
+primary_region = "iad"
+
+[build]
+  dockerfile = "infra/docker/control-plane.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  CONTROL_PLANE_HOST = "0.0.0.0"
+  CONTROL_PLANE_PORT = "4000"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/ready"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

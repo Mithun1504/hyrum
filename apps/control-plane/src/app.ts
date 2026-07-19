@@ -7,6 +7,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { problemDetailsSchema } from "@hyrum/contracts";
 import type { RuntimeEnv } from "@hyrum/env";
 import { createLogger } from "@hyrum/logger";
+import { metrics, trace } from "@opentelemetry/api";
 import { WorkOS } from "@workos-inc/node";
 import Fastify from "fastify";
 import {
@@ -39,6 +40,24 @@ export async function buildApp({ env, includeDatabase = true }: BuildAppOptions)
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.decorate("webUrl", env.WEB_URL);
+  const meter = metrics.getMeter("hyrum-control-plane");
+  const requestCount = meter.createCounter("hyrum.http.server.requests", {
+    description: "Completed HTTP requests without tenant or payload labels",
+  });
+  const requestDuration = meter.createHistogram("hyrum.http.server.duration", { unit: "ms" });
+  app.addHook("onRequest", async (_request, reply) => {
+    const traceId = trace.getActiveSpan()?.spanContext().traceId;
+    if (traceId) reply.header("x-trace-id", traceId);
+  });
+  app.addHook("onResponse", async (request, reply) => {
+    const attributes = {
+      "http.route": request.routeOptions.url,
+      "http.request.method": request.method,
+      "http.response.status_code": reply.statusCode,
+    };
+    requestCount.add(1, attributes);
+    requestDuration.record(reply.elapsedTime, attributes);
+  });
   await app.register(sensible);
   await app.register(cors, { origin: env.WEB_URL, credentials: true });
   await app.register(helmet, { contentSecurityPolicy: false });

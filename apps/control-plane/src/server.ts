@@ -1,13 +1,16 @@
 import { parseRuntimeEnv } from "@hyrum/env";
-import { buildApp } from "./app";
+import { startTelemetry, stopTelemetry } from "./telemetry";
 
 async function main() {
   const env = parseRuntimeEnv();
+  startTelemetry(env.OTEL_EXPORTER_OTLP_ENDPOINT);
+  const { buildApp } = await import("./app");
   const app = await buildApp({ env });
 
   const shutdown = async (signal: string) => {
     app.log.info({ signal }, "shutting down");
     await app.close();
+    await stopTelemetry();
     process.exit(0);
   };
 

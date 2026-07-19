@@ -48,6 +48,33 @@ func TestShapeIncludesFieldsFromEveryArrayObject(t *testing.T) {
 	}
 }
 
+func TestFinalizeSeriesModelsAbsentNullAndPaginatedStability(t *testing.T) {
+	first := Extract(200, map[string]any{"items": []any{map[string]any{"id": "one", "optional": nil}}}, Options{Paginated: true})
+	second := Extract(200, map[string]any{"items": []any{map[string]any{"id": "two"}}}, Options{Paginated: true})
+	FinalizeSeries([]*Fingerprint{&first, &second})
+	var optional PresencePattern
+	for _, pattern := range first.Presence {
+		if pattern.Path == "$.items[].optional" {
+			optional = pattern
+		}
+	}
+	if len(optional.States) != 2 || optional.States[0] != "absent" || optional.States[1] != "null" {
+		t.Fatalf("unexpected presence pattern: %#v", optional)
+	}
+	if first.Ordering[0].CrossPageStable == nil || !*first.Ordering[0].CrossPageStable || first.Ordering[0].PageSamples != 2 {
+		t.Fatalf("cross-page ordering was not finalized: %#v", first.Ordering[0])
+	}
+	var ids EnumSet
+	for _, enum := range first.Enums {
+		if enum.Path == "$.items[].id" {
+			ids = enum
+		}
+	}
+	if len(ids.Values) != 2 || len(second.Enums) != len(first.Enums) {
+		t.Fatalf("observed enum set was not aggregated across calls: %#v", first.Enums)
+	}
+}
+
 func FuzzNormalizeError(f *testing.F) {
 	f.Add("order 123 failed")
 	f.Fuzz(func(t *testing.T, input string) {

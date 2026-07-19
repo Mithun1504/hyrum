@@ -2,20 +2,31 @@ import {
   apiSpecSchema,
   assertionSchema,
   type CaptureBatch,
+  type CreateCorpusItemRequest,
+  type CreateReplayCorpusRequest,
   captureBatchResponseSchema,
-  consumerSchema,
+  claimOverrideResponseSchema,
+  consumerListResponseSchema,
+  corpusItemSchema,
   gatePolicySchema,
   healthResponseSchema,
-  ledgerEntrySchema,
+  ledgerListResponseSchema,
+  type OverrideDependencyClaimRequest,
   type PinAssertionRequest,
+  type PrepareCorpusUploadRequest,
   type ProblemDetails,
+  prepareCorpusUploadResponseSchema,
   problemDetailsSchema,
   progressEventListSchema,
   type ReplayReport,
+  type ResolveAssertionRequest,
   receiptSchema,
+  replayCorpusSchema,
   replayReportResponseSchema,
   replayRunDetailResponseSchema,
   sessionResponseSchema,
+  type UpdateCorpusItemRequest,
+  type UpdateReplayCorpusRequest,
   type UploadApiSpecRequest,
   type UpsertGatePolicyRequest,
   workspaceSummarySchema,
@@ -28,6 +39,7 @@ export {
   progressEventTopicSchema,
   progressEventTopics,
 } from "@hyrum/contracts";
+export type * from "./generated";
 
 export class ControlPlaneError extends Error {
   constructor(public readonly problem: ProblemDetails) {
@@ -42,9 +54,35 @@ export interface ControlPlaneClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-const ledgerListSchema = z.object({ entries: z.array(ledgerEntrySchema) });
-const consumerListSchema = z.object({ consumers: z.array(consumerSchema) });
+export type LedgerListQuery = {
+  q?: string;
+  tier?: "T1" | "T2" | "T3";
+  kind?: "shape" | "ordering" | "error" | "status";
+  state?: "active" | "stale" | "dismissed";
+  cursor?: string;
+  limit?: number;
+};
+
+export type ConsumerListQuery = { q?: string; cursor?: string; limit?: number };
+
+function withQuery(path: string, query: Record<string, string | number | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") search.set(key, String(value));
+  }
+  const suffix = search.toString();
+  return suffix ? `${path}?${suffix}` : path;
+}
+
 const assertionListSchema = z.object({ assertions: z.array(assertionSchema) });
+const corpusListSchema = z.object({ corpora: z.array(replayCorpusSchema) });
+const advisoryResponseSchema = z.object({
+  role: z.enum(["behavior_clusters", "tier_proposals", "replay_priorities", "impact_explanations"]),
+  run_id: z.uuid(),
+  model: z.string(),
+  prompt_version: z.string(),
+  result: z.unknown(),
+});
 
 export function createControlPlaneClient(options: ControlPlaneClientOptions) {
   const fetcher = options.fetch ?? globalThis.fetch;
@@ -92,16 +130,51 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions) {
       return sessionResponseSchema.parse(await response.json());
     },
     async uploadApiSpec(body: UploadApiSpecRequest) {
-      const response = await request("/v1/api-specs", { method: "POST", body: jsonBody(body) });
+      const response = await request("/v1/api-specs", {
+        method: "POST",
+        body: jsonBody(body),
+      });
       return apiSpecSchema.parse(await response.json());
     },
-    async listLedger() {
-      const response = await request("/v1/ledger");
-      return ledgerListSchema.parse(await response.json()).entries;
+    async listLedgerPage(query: LedgerListQuery = {}) {
+      const response = await request(withQuery("/v1/ledger", query));
+      return ledgerListResponseSchema.parse(await response.json());
     },
-    async listConsumers() {
-      const response = await request("/v1/consumers");
-      return consumerListSchema.parse(await response.json()).consumers;
+    async listLedger(query: Omit<LedgerListQuery, "cursor"> = {}) {
+      const entries = [];
+      let cursor: string | null = null;
+      let total = 0;
+      do {
+        const page = await this.listLedgerPage({
+          ...query,
+          ...(cursor ? { cursor } : {}),
+          limit: 100,
+        });
+        entries.push(...page.entries);
+        total = page.total;
+        cursor = page.next_cursor;
+      } while (cursor);
+      return { entries, next_cursor: null, total };
+    },
+    async listConsumersPage(query: ConsumerListQuery = {}) {
+      const response = await request(withQuery("/v1/consumers", query));
+      return consumerListResponseSchema.parse(await response.json());
+    },
+    async listConsumers(query: Omit<ConsumerListQuery, "cursor"> = {}) {
+      const consumers = [];
+      let cursor: string | null = null;
+      let total = 0;
+      do {
+        const page = await this.listConsumersPage({
+          ...query,
+          ...(cursor ? { cursor } : {}),
+          limit: 100,
+        });
+        consumers.push(...page.consumers);
+        total = page.total;
+        cursor = page.next_cursor;
+      } while (cursor);
+      return { consumers, next_cursor: null, total };
     },
     async getWorkspaceSummary() {
       const response = await request("/v1/workspace/summary");
@@ -116,8 +189,25 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions) {
       return receiptSchema.parse(await response.json());
     },
     async pinAssertion(body: PinAssertionRequest) {
-      const response = await request("/v1/assertions", { method: "POST", body: jsonBody(body) });
+      const response = await request("/v1/assertions", {
+        method: "POST",
+        body: jsonBody(body),
+      });
       return assertionSchema.parse(await response.json());
+    },
+    async resolveAssertion(id: string, body: ResolveAssertionRequest) {
+      const response = await request(`/v1/assertions/${encodeURIComponent(id)}/resolve`, {
+        method: "POST",
+        body: jsonBody(body),
+      });
+      return assertionSchema.parse(await response.json());
+    },
+    async overrideDependencyClaim(id: string, body: OverrideDependencyClaimRequest) {
+      const response = await request(`/v1/claims/${encodeURIComponent(id)}/override`, {
+        method: "PUT",
+        body: jsonBody(body),
+      });
+      return claimOverrideResponseSchema.parse(await response.json());
     },
     async listAssertions() {
       const response = await request("/v1/assertions");
@@ -128,8 +218,60 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions) {
       return gatePolicySchema.parse(await response.json());
     },
     async updatePolicy(body: UpsertGatePolicyRequest) {
-      const response = await request("/v1/policy", { method: "PUT", body: jsonBody(body) });
+      const response = await request("/v1/policy", {
+        method: "PUT",
+        body: jsonBody(body),
+      });
       return gatePolicySchema.parse(await response.json());
+    },
+    async listReplayCorpora() {
+      const response = await request("/v1/replay/corpora");
+      return corpusListSchema.parse(await response.json()).corpora;
+    },
+    async prepareCorpusUpload(body: PrepareCorpusUploadRequest) {
+      const response = await request("/v1/replay/corpora/uploads", {
+        method: "POST",
+        body: jsonBody(body),
+      });
+      return prepareCorpusUploadResponseSchema.parse(await response.json());
+    },
+    async createReplayCorpus(body: CreateReplayCorpusRequest) {
+      const response = await request("/v1/replay/corpora", {
+        method: "POST",
+        body: jsonBody(body),
+      });
+      return replayCorpusSchema.parse(await response.json());
+    },
+    async addCorpusItem(corpusId: string, body: CreateCorpusItemRequest) {
+      const response = await request(`/v1/replay/corpora/${encodeURIComponent(corpusId)}/items`, {
+        method: "POST",
+        body: jsonBody(body),
+      });
+      return corpusItemSchema.parse(await response.json());
+    },
+    async updateCorpusItem(corpusId: string, itemId: string, body: UpdateCorpusItemRequest) {
+      const response = await request(
+        `/v1/replay/corpora/${encodeURIComponent(corpusId)}/items/${encodeURIComponent(itemId)}`,
+        { method: "PATCH", body: jsonBody(body) },
+      );
+      return corpusItemSchema.parse(await response.json());
+    },
+    async updateReplayCorpus(corpusId: string, body: UpdateReplayCorpusRequest) {
+      const response = await request(`/v1/replay/corpora/${encodeURIComponent(corpusId)}`, {
+        method: "PATCH",
+        body: jsonBody(body),
+      });
+      return replayCorpusSchema.parse(await response.json());
+    },
+    async runModelAdvisory(
+      role: "behavior_clusters" | "tier_proposals" | "replay_priorities" | "impact_explanations",
+      entityIds: string[],
+    ) {
+      const response = await request(`/v1/model-assistance/${role}`, {
+        method: "POST",
+        body: jsonBody({ entity_ids: entityIds }),
+      });
+      return advisoryResponseSchema.parse(await response.json());
     },
     async ingestReplayReport(report: ReplayReport) {
       const response = await request("/v1/replay/reports", {

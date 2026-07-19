@@ -10,8 +10,11 @@
     "NEXT_DIST_DIR",
     "HYRUM_ACCEPTANCE_POSTGRES_PORT",
     "HYRUM_ACCEPTANCE_MINIO_API_PORT",
-    "HYRUM_ACCEPTANCE_MINIO_CONSOLE_PORT"
+    "HYRUM_ACCEPTANCE_MINIO_CONSOLE_PORT",
+    "HYRUM_RUN_K6",
+    "TOXIPROXY_API"
   ],
+  "globalPassThroughEnv": ["DATABASE_URL", "RESILIENCE_DATABASE_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

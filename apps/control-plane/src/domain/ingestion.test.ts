@@ -27,12 +27,23 @@ const event = {
   request: { method: "GET", path: `/${stringToken}`, path_template: "/products" },
   response: { status: 200 },
   fingerprint: {
-    version: "1.0.0",
+    version: "1.1.0",
     status: 200,
     shape: [
       { path: "$.id", type: "string" },
       { path: "$.next_cursor", type: "string" },
       { path: "$.legacy_id", type: "string" },
+    ],
+    presence: [
+      { path: "$.id", states: ["present"] },
+      { path: "$.next_cursor", states: ["null", "present"] },
+      { path: "$.legacy_id", states: ["absent", "present"] },
+    ],
+    enums: [
+      {
+        path: "$.legacy_id",
+        values: ["c".repeat(64), "d".repeat(64)],
+      },
     ],
     error: { status: 422, template: otherStringToken, digest: "err_422" },
   },
@@ -115,6 +126,13 @@ describe("capture evidence candidates", () => {
     );
     const legacy = candidates.find((candidate) => candidate.path === "$.legacy_id");
     expect(legacy?.tier).toBe("T3");
+    expect(legacy?.fingerprint).toEqual({
+      path: "$.legacy_id",
+      type: "string",
+      presence: ["absent", "present"],
+      observed_enum: ["c".repeat(64), "d".repeat(64)],
+      enum_truncated: false,
+    });
     expect(legacy ? ledgerTitle(legacy) : "").toBe("Exposure: shape $.legacy_id");
   });
 

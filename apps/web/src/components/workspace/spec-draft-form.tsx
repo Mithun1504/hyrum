@@ -1,5 +1,6 @@
 "use client";
 
+import type { SpecDraft } from "@hyrum/contracts";
 import { FileText } from "lucide-react";
 import { useActionState } from "react";
 import { draftSpecAction, type SpecDraftState } from "@/app/(dashboard)/app/actions";
@@ -64,7 +65,7 @@ function SpecDraftResult({ state }: { state: SpecDraftState }) {
             Proposed OpenAPI operations
           </div>
           <div className="divide-y divide-border">
-            {draft.openapiPatch.map((operation) => (
+            {draft.openapiPatch.map((operation: SpecDraft["openapiPatch"][number]) => (
               <div
                 key={`${operation.op}:${operation.path}`}
                 className="grid gap-1 px-3 py-3 sm:grid-cols-[4rem_minmax(0,1fr)]"

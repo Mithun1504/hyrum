@@ -250,6 +250,22 @@ func Process(events []Event, config Config) ([]Record, error) {
 		return nil, err
 	}
 	evidence := session.Infer(sequences)
+	presenceSeries := map[string][]*extractors.Fingerprint{}
+	orderingSeries := map[string][]*extractors.Fingerprint{}
+	for i := range records {
+		presenceKey := records[i].OrganizationID + "\x00" + records[i].ConsumerID + "\x00" + records[i].Request.Method + "\x00" + operationIdentity(records[i].Request)
+		presenceSeries[presenceKey] = append(presenceSeries[presenceKey], &records[i].Fingerprint)
+		if len(records[i].Fingerprint.Ordering) > 0 {
+			orderingKey := records[i].OrganizationID + "\x00" + records[i].SessionID + "\x00" + records[i].ConsumerID + "\x00" + records[i].Request.Method + "\x00" + operationIdentity(records[i].Request)
+			orderingSeries[orderingKey] = append(orderingSeries[orderingKey], &records[i].Fingerprint)
+		}
+	}
+	for _, fingerprints := range presenceSeries {
+		extractors.FinalizePresenceSeries(fingerprints)
+	}
+	for _, fingerprints := range orderingSeries {
+		extractors.FinalizeOrderingSeries(fingerprints)
+	}
 	for i := range records {
 		key := records[i].OrganizationID + "\x00" + records[i].SessionID
 		for _, item := range evidence[key] {

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { updatePolicyAction } from "@/app/(dashboard)/app/actions";
+import { PolicyEditor } from "@/components/workspace/policy-editor";
 import { TierBadge } from "@/components/workspace/tier-badge";
 import { cn } from "@/lib/utils";
 import type { EvidenceTier, LedgerRow, WorkspaceSnapshot } from "@/services/workspace-data";
@@ -59,7 +61,7 @@ export function ConsumersView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
     <>
       <SectionIntro
         title="Consumers"
-        desc="Start here when the question is who is exposed. Each row rolls up facts in the latest 100 loaded ledger entries for one stable consumer identity."
+        desc="Start here when the question is who is exposed. Each row rolls up the complete retained tenant ledger for one stable consumer identity."
       />
       <AuditPanel>
         <MobileList>
@@ -86,7 +88,7 @@ export function ConsumersView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               />
               <EvidenceCell row={item.strongest} empty="No accidental behavior yet" />
               <td className="px-4 py-4 text-sm">
-                {item.endpoints} endpoint labels · {item.rows.length} loaded entries
+                {item.endpoints} endpoint labels · {item.rows.length} retained entries
                 <p className="mt-1 text-xs text-muted-foreground">
                   {item.observations.toLocaleString()} observations across{" "}
                   {item.sessions.toLocaleString()} sessions
@@ -140,7 +142,7 @@ export function EndpointsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
     <>
       <SectionIntro
         title="Endpoints"
-        desc="These are endpoint labels retained on loaded ledger entries. They are useful investigation context, not endpoint-scoped totals, because behavior identity can span operations."
+        desc="These are endpoint labels retained across the complete tenant ledger. They are useful investigation context, not endpoint-scoped totals, because behavior identity can span operations."
       />
       <AuditPanel>
         <MobileList>
@@ -152,7 +154,7 @@ export function EndpointsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           headers={[
             "Endpoint",
             "Strongest behavior",
-            "Loaded references",
+            "Retained references",
             "Evidence mix",
             "Freshness",
             "Next review",
@@ -167,7 +169,7 @@ export function EndpointsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               />
               <EvidenceCell row={item.strongest} empty="No behavior rows" />
               <td className="px-4 py-4 text-sm">
-                {item.consumers} consumers · {item.rows.length} loaded entries
+                {item.consumers} consumers · {item.rows.length} retained entries
                 <p className="mt-1 text-xs text-muted-foreground">
                   Counts reflect retained endpoint labels, not endpoint-scoped observations.
                 </p>
@@ -253,6 +255,13 @@ export function PolicyView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
                 Model output may label or explain evidence, but it cannot create a blocking fact.
               </p>
             </div>
+            <div className="mt-6 border-t border-border pt-6">
+              <PolicyEditor
+                policy={policy}
+                canManage={snapshot.permissions.canManagePolicy}
+                action={updatePolicyAction}
+              />
+            </div>
           </section>
         </div>
       ) : (
@@ -272,7 +281,7 @@ function ConsumerCard({ item }: { item: ConsumerAuditItem }) {
       detail={item.consumer.stable_id}
       href={ledgerHref(item.consumer.display_alias)}
       strongest={item.strongest}
-      meta={`${item.endpoints} endpoint labels · ${item.rows.length} loaded entries · ${formatDate(item.lastSeen)}`}
+      meta={`${item.endpoints} endpoint labels · ${item.rows.length} retained entries · ${formatDate(item.lastSeen)}`}
     >
       <TierCounts counts={item.tiers} />
     </MobileAuditCard>

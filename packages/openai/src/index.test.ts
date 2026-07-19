@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deterministicSpecDraftFallback, draftOpenApiChange, type SpecDraftInput } from "./index";
+import {
+  clusterAndNameBehaviors,
+  deterministicSpecDraftFallback,
+  draftOpenApiChange,
+  proposeEvidenceTiers,
+  type SpecDraftInput,
+} from "./index";
 
 const input: SpecDraftInput = {
   method: "GET",
@@ -74,4 +80,53 @@ describe("OpenAI advisory boundary", () => {
     expect(fallback.abstained).toBe(true);
     expect(fallback.openapiPatch).toEqual([]);
   });
+
+  it("runs the behavior clustering role with receipt-bound structured output", async () => {
+    const client = parsedClient({
+      summary: "One cluster",
+      receiptIds: ["receipt-1"],
+      uncertainty: 0.1,
+      abstained: false,
+      abstentionReason: null,
+      clusters: [
+        { name: "Pagination contract", description: "Cursor behavior", behaviorIds: ["b1"] },
+      ],
+    });
+    const run = await clusterAndNameBehaviors(
+      { receiptIds: ["receipt-1"], redactedEvidence: ["cursor hash"], behaviors: [{ id: "b1" }] },
+      { client: client as never },
+    );
+    expect(run.result.clusters[0]?.name).toBe("Pagination contract");
+  });
+
+  it("rejects a model-proposed T1 tier without deterministic echo eligibility", async () => {
+    const client = parsedClient({
+      summary: "Proposal",
+      receiptIds: ["receipt-1"],
+      uncertainty: 0.2,
+      abstained: false,
+      abstentionReason: null,
+      proposals: [
+        { claimId: "claim-1", tier: "T1", rationale: "Looks important", receiptIds: ["receipt-1"] },
+      ],
+    });
+    await expect(
+      proposeEvidenceTiers(
+        {
+          receiptIds: ["receipt-1"],
+          redactedEvidence: ["pattern only"],
+          claims: [{ claimId: "claim-1", echoEligible: false }],
+        },
+        { client: client as never },
+      ),
+    ).rejects.toThrow("deterministic echo eligibility");
+  });
 });
+
+function parsedClient(output: unknown) {
+  return {
+    responses: {
+      parse: async () => ({ id: "resp-role", model: "gpt-5.6", output_parsed: output }),
+    },
+  };
+}

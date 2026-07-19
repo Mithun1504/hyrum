@@ -143,7 +143,10 @@ export class S3ObjectStorage {
     const keyParts = parseObjectKeyForTenant(input.key, input.organizationId);
     try {
       const output = await this.#send<GetObjectCommandOutput>(
-        new GetObjectCommand({ Bucket: this.#config.bucket, Key: keyParts.key }),
+        new GetObjectCommand({
+          Bucket: this.#config.bucket,
+          Key: keyParts.key,
+        }),
       );
       if (Number(output.ContentLength ?? 0) > this.#config.maxObjectBytes) {
         throw new ObjectStorageError(
@@ -179,7 +182,10 @@ export class S3ObjectStorage {
     const keyParts = parseObjectKeyForTenant(input.key, input.organizationId);
     try {
       const output = await this.#send<HeadObjectCommandOutput>(
-        new HeadObjectCommand({ Bucket: this.#config.bucket, Key: keyParts.key }),
+        new HeadObjectCommand({
+          Bucket: this.#config.bucket,
+          Key: keyParts.key,
+        }),
       );
       const metadataSha256 = output.Metadata?.sha256;
       if (metadataSha256 && metadataSha256 !== keyParts.sha256) {
@@ -202,7 +208,12 @@ export class S3ObjectStorage {
 
   async deleteObject(input: { organizationId: string; key: string }): Promise<void> {
     const keyParts = parseObjectKeyForTenant(input.key, input.organizationId);
-    await this.#send(new DeleteObjectCommand({ Bucket: this.#config.bucket, Key: keyParts.key }));
+    await this.#send(
+      new DeleteObjectCommand({
+        Bucket: this.#config.bucket,
+        Key: keyParts.key,
+      }),
+    );
   }
 
   async presignRead(input: {
@@ -224,7 +235,59 @@ export class S3ObjectStorage {
     );
   }
 
-  #encryptionInput(): { ServerSideEncryption?: ServerSideEncryption; SSEKMSKeyId?: string } {
+  async presignWrite(input: {
+    organizationId: string;
+    kind: ObjectKind;
+    sha256: string;
+    sizeBytes: number;
+    contentType: string;
+    expiresInSeconds: number;
+  }): Promise<{ key: string; url: string; headers: Record<string, string> }> {
+    const organizationId = organizationIdSchema.parse(input.organizationId);
+    const kind = z.enum(storageKinds).parse(input.kind);
+    const sha256 = sha256Schema.parse(input.sha256);
+    const sizeBytes = z
+      .number()
+      .int()
+      .positive()
+      .max(this.#config.maxObjectBytes)
+      .parse(input.sizeBytes);
+    const contentType = z.string().min(1).max(200).parse(input.contentType);
+    if (input.expiresInSeconds < 1 || input.expiresInSeconds > this.#config.presignMaxSeconds) {
+      throw new ObjectStorageError(
+        "Presigned URL expiry is outside the allowed bounds",
+        "INVALID_INPUT",
+      );
+    }
+    const key = objectKey({ organizationId, kind, sha256 });
+    const metadata = { sha256, kind };
+    const url = await this.#presign(
+      this.#client as S3Client,
+      new PutObjectCommand({
+        Bucket: this.#config.bucket,
+        Key: key,
+        ContentLength: sizeBytes,
+        ContentType: contentType,
+        Metadata: metadata,
+        ...this.#encryptionInput(),
+      }),
+      { expiresIn: input.expiresInSeconds },
+    );
+    return {
+      key,
+      url,
+      headers: {
+        "content-type": contentType,
+        "x-amz-meta-sha256": sha256,
+        "x-amz-meta-kind": kind,
+      },
+    };
+  }
+
+  #encryptionInput(): {
+    ServerSideEncryption?: ServerSideEncryption;
+    SSEKMSKeyId?: string;
+  } {
     if (this.#config.serverSideEncryption === "bucket") return {};
     if (this.#config.serverSideEncryption === "AES256") return { ServerSideEncryption: "AES256" };
     if (!this.#config.kmsKeyId) {
@@ -233,7 +296,10 @@ export class S3ObjectStorage {
         "INVALID_INPUT",
       );
     }
-    return { ServerSideEncryption: "aws:kms", SSEKMSKeyId: this.#config.kmsKeyId };
+    return {
+      ServerSideEncryption: "aws:kms",
+      SSEKMSKeyId: this.#config.kmsKeyId,
+    };
   }
 
   async #send<T>(command: unknown): Promise<T> {
@@ -276,7 +342,13 @@ function parseObjectKeyForTenant(key: string, organizationId: string): StoredObj
       "INVALID_INPUT",
     );
   }
-  return { organizationId: parsedOrganizationId, kind, key: parsedKey, sha256, sizeBytes: 0 };
+  return {
+    organizationId: parsedOrganizationId,
+    kind,
+    key: parsedKey,
+    sha256,
+    sizeBytes: 0,
+  };
 }
 
 function toBuffer(body: StorageBody, maxBytes: number): Buffer {

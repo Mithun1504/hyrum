@@ -11,6 +11,8 @@ export const captureRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     "/capture/batches",
     {
+      // This route alone accepts the contract maximum of 1,000 already-redacted events.
+      bodyLimit: 8 * 1_048_576,
       preHandler: app.requireMachineScope("capture:write"),
       schema: {
         tags: ["capture"],

@@ -1,14 +1,25 @@
 import { hostname } from "node:os";
-import { assertSafeDatabasePrincipal, createDatabaseClient } from "@hyrum/db";
 import { parseRuntimeEnv } from "@hyrum/env";
-import { createLogger } from "@hyrum/logger";
-import { createObjectStorage } from "@hyrum/storage";
-import { workerDatabaseUrl } from "./config";
-import { createDefaultHandlers } from "./handlers";
-import { runWorker } from "./runner";
+import { startTelemetry, stopTelemetry } from "./telemetry";
 
 async function main() {
   const env = parseRuntimeEnv();
+  startTelemetry(env.OTEL_EXPORTER_OTLP_ENDPOINT);
+  const [dbModule, loggerModule, storageModule, configModule, handlersModule, runnerModule] =
+    await Promise.all([
+      import("@hyrum/db"),
+      import("@hyrum/logger"),
+      import("@hyrum/storage"),
+      import("./config"),
+      import("./handlers"),
+      import("./runner"),
+    ]);
+  const { assertSafeDatabasePrincipal, createDatabaseClient } = dbModule;
+  const { createLogger } = loggerModule;
+  const { createObjectStorage } = storageModule;
+  const { workerDatabaseUrl } = configModule;
+  const { createDefaultHandlers } = handlersModule;
+  const { runWorker } = runnerModule;
   const logger = createLogger("worker", env.LOG_LEVEL);
   const database = createDatabaseClient(
     workerDatabaseUrl(env),
@@ -57,6 +68,7 @@ async function main() {
     controller.signal,
   );
   await database.close();
+  await stopTelemetry();
   logger.info("worker stopped");
 }
 

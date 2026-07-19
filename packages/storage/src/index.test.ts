@@ -69,7 +69,11 @@ describe("S3 object storage", () => {
     const storage = createObjectStorage(config(), {
       client: { send: vi.fn() },
     });
-    const otherTenantKey = objectKey({ organizationId: orgB, kind: "receipt", sha256 });
+    const otherTenantKey = objectKey({
+      organizationId: orgB,
+      kind: "receipt",
+      sha256,
+    });
 
     await expect(
       storage.headObject({ organizationId: orgA, key: otherTenantKey }),
@@ -86,7 +90,10 @@ describe("S3 object storage", () => {
       client: {
         send: vi.fn(async (command) => {
           if (command instanceof GetObjectCommand) {
-            return { Body: responseBody(Buffer.from("tampered")), ContentType: "application/json" };
+            return {
+              Body: responseBody(Buffer.from("tampered")),
+              ContentType: "application/json",
+            };
           }
           return {};
         }),
@@ -148,6 +155,37 @@ describe("S3 object storage", () => {
     expect(presign).toHaveBeenCalledOnce();
   });
 
+  it("creates bounded tenant-scoped content-addressed upload URLs", async () => {
+    const presign = vi.fn(async (_client, command, options) => {
+      expect(command).toBeInstanceOf(PutObjectCommand);
+      expect(options).toEqual({ expiresIn: 120 });
+      return "https://signed.example/upload";
+    });
+    const storage = createObjectStorage(config({ presignMaxSeconds: 120 }), {
+      client: { send: vi.fn() },
+      presign,
+    });
+
+    await expect(
+      storage.presignWrite({
+        organizationId: orgA,
+        kind: "corpus",
+        sha256,
+        sizeBytes: body.byteLength,
+        contentType: "application/x-ndjson",
+        expiresInSeconds: 120,
+      }),
+    ).resolves.toEqual({
+      key: `organizations/${orgA}/corpus/sha256/${sha256}`,
+      url: "https://signed.example/upload",
+      headers: {
+        "content-type": "application/x-ndjson",
+        "x-amz-meta-sha256": sha256,
+        "x-amz-meta-kind": "corpus",
+      },
+    });
+  });
+
   it("sends configured per-object encryption only when selected", async () => {
     const commands: unknown[] = [];
     const storage = createObjectStorage(config({ serverSideEncryption: "AES256" }), {
@@ -166,7 +204,9 @@ describe("S3 object storage", () => {
 
   it("enforces strict max body limits before SDK calls", async () => {
     const send = vi.fn();
-    const storage = createObjectStorage(config({ maxObjectBytes: 2 }), { client: { send } });
+    const storage = createObjectStorage(config({ maxObjectBytes: 2 }), {
+      client: { send },
+    });
 
     await expect(
       storage.putObject({

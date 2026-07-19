@@ -40,6 +40,22 @@ type Config struct {
 	MaskPaths            []string              `json:"mask_paths,omitempty"`
 	Source               *report.SourceContext `json:"source,omitempty"`
 	Corpus               []CorpusItem          `json:"corpus"`
+	Isolation            *DockerIsolation      `json:"isolation,omitempty"`
+}
+
+type DockerIsolation struct {
+	BaseImage      string  `json:"base_image"`
+	CandidateImage string  `json:"candidate_image"`
+	StubImage      string  `json:"stub_image,omitempty"`
+	FixtureImage   string  `json:"fixture_image,omitempty"`
+	ContainerPort  int     `json:"container_port"`
+	StubPort       int     `json:"stub_port,omitempty"`
+	FixturePort    int     `json:"fixture_port,omitempty"`
+	HealthPath     string  `json:"health_path,omitempty"`
+	FixturePath    string  `json:"fixture_path,omitempty"`
+	MemoryMB       int     `json:"memory_mb,omitempty"`
+	CPUs           float64 `json:"cpus,omitempty"`
+	PIDsLimit      int     `json:"pids_limit,omitempty"`
 }
 
 type CorpusItem struct {
@@ -128,35 +144,46 @@ func (config *Config) Validate() error {
 	if err := report.ValidateSourceContext(config.Source); err != nil {
 		return fmt.Errorf("source: %w", err)
 	}
-	base, err := validateTarget(config.BaseURL)
-	if err != nil {
-		return fmt.Errorf("base_url: %w", err)
-	}
-	candidate, err := validateTarget(config.CandidateURL)
-	if err != nil {
-		return fmt.Errorf("candidate_url: %w", err)
-	}
-	if base.String() == candidate.String() {
-		return errors.New("base_url and candidate_url must differ")
-	}
-	if len(config.AllowedHosts) == 0 {
-		return errors.New("allowed_hosts must explicitly approve replay targets")
-	}
-	allowed := normalizedHosts(config.AllowedHosts)
-	for i, host := range config.AllowedHosts {
-		_, ipErr := netip.ParseAddr(host)
-		literalIP := ipErr == nil
-		if host != normalizeHost(host) || host == "" || (!literalIP && strings.Contains(host, ":")) || strings.ContainsAny(host, "/?#@") {
-			return fmt.Errorf("allowed_hosts[%d] must be a lowercase hostname or IP without a port", i)
+	if config.Isolation != nil {
+		if err := config.Isolation.Validate(); err != nil {
+			return fmt.Errorf("isolation: %w", err)
 		}
 	}
-	for name, target := range map[string]*url.URL{"base_url": base, "candidate_url": candidate} {
-		host := normalizeHost(target.Hostname())
-		if _, ok := allowed[host]; !ok {
-			return fmt.Errorf("%s host %q is not explicitly allowlisted", name, host)
+	if config.BaseURL == "" || config.CandidateURL == "" {
+		if config.Isolation == nil {
+			return errors.New("base_url and candidate_url are required without Docker isolation")
 		}
-		if isMetadataHost(host) {
-			return fmt.Errorf("%s metadata host is forbidden", name)
+	} else {
+		base, err := validateTarget(config.BaseURL)
+		if err != nil {
+			return fmt.Errorf("base_url: %w", err)
+		}
+		candidate, err := validateTarget(config.CandidateURL)
+		if err != nil {
+			return fmt.Errorf("candidate_url: %w", err)
+		}
+		if base.String() == candidate.String() {
+			return errors.New("base_url and candidate_url must differ")
+		}
+		if len(config.AllowedHosts) == 0 {
+			return errors.New("allowed_hosts must explicitly approve replay targets")
+		}
+		allowed := normalizedHosts(config.AllowedHosts)
+		for i, host := range config.AllowedHosts {
+			_, ipErr := netip.ParseAddr(host)
+			literalIP := ipErr == nil
+			if host != normalizeHost(host) || host == "" || (!literalIP && strings.Contains(host, ":")) || strings.ContainsAny(host, "/?#@") {
+				return fmt.Errorf("allowed_hosts[%d] must be a lowercase hostname or IP without a port", i)
+			}
+		}
+		for name, target := range map[string]*url.URL{"base_url": base, "candidate_url": candidate} {
+			host := normalizeHost(target.Hostname())
+			if _, ok := allowed[host]; !ok {
+				return fmt.Errorf("%s host %q is not explicitly allowlisted", name, host)
+			}
+			if isMetadataHost(host) {
+				return fmt.Errorf("%s metadata host is forbidden", name)
+			}
 		}
 	}
 	if config.Runs == 0 {

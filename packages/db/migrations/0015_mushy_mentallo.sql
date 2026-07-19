@@ -1,0 +1,1 @@
+ALTER TABLE "gate_policies" ADD CONSTRAINT "gate_policies_outcomes_disjoint" CHECK (NOT ("gate_policies"."block_tiers" && "gate_policies"."warn_tiers"));

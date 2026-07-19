@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": 200,
   "shape": [
     {
@@ -25,6 +25,58 @@
     {
       "path": "$.next_cursor",
       "type": "string"
+    }
+  ],
+  "presence": [
+    {
+      "path": "$",
+      "states": [
+        "present"
+      ]
+    },
+    {
+      "path": "$.items",
+      "states": [
+        "present"
+      ]
+    },
+    {
+      "path": "$.items[]",
+      "states": [
+        "present"
+      ]
+    },
+    {
+      "path": "$.items[].id",
+      "states": [
+        "present"
+      ]
+    },
+    {
+      "path": "$.items[].legacy_id",
+      "states": [
+        "null"
+      ]
+    },
+    {
+      "path": "$.next_cursor",
+      "states": [
+        "present"
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "path": "$.items[].id",
+      "values": [
+        "b87782b8b82e05aa1f7f428216a2b3a808758e8bf2155a3f75c9a1b4e7361712"
+      ]
+    },
+    {
+      "path": "$.next_cursor",
+      "values": [
+        "e31ae9d8e3edef50b397f94d9175851ec5e7abda9869364ef178194ca78905f3"
+      ]
     }
   ],
   "ordering": [

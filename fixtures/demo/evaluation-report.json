@@ -3,7 +3,7 @@
   "corpus": "fixtures/demo/traffic-50000.ndjson.gz",
   "record_count": 50000,
   "deterministic_runs": 2,
-  "output_sha256": "d9d46cd7fdb8bfdfc6acc5a874d3fbd4b1eb24359672403ea14f175f7c28f73a",
+  "output_sha256": "9f7fb53aeb8de3e5db0392cd616febcd0f0ab192ae641fdafbf63c6185228c31",
   "replay_stability_target": 0.99,
   "tier1": {
     "tp": 10000,

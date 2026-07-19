@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/hyrum-dev/hyrum/internal/buildinfo"
 	"github.com/hyrum-dev/hyrum/internal/capture"
+	"github.com/hyrum-dev/hyrum/internal/sampling"
 )
 
 type stringsFlag []string
@@ -35,6 +37,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) s
 	organizationID := flags.String("organization-id", "", "organization that owns every input event")
 	inputPath := flags.String("input", "-", "capture NDJSON path, or - for stdin")
 	outputPath := flags.String("output", "-", "redacted NDJSON path, or - for stdout")
+	sampleRate := flags.Float64("sample-rate", 1, "deterministic whole-session sample rate (0..1)")
+	sampleWindow := flags.Duration("sample-window", time.Hour, "consumer sampling window")
+	lowVolumeThreshold := flags.Int("low-volume-threshold", 5, "sessions per consumer window eligible for boost")
+	lowVolumeBoost := flags.Float64("low-volume-boost", 4, "sample-rate multiplier for low-volume consumers")
 	var sensitivePaths, maskPaths, operationTemplates stringsFlag
 	flags.Var(&sensitivePaths, "sensitive-path", "exact JSON path to redact; repeatable")
 	flags.Var(&maskPaths, "mask-path", "nondeterministic response path to mask; repeatable")
@@ -60,6 +66,16 @@ func run(args []string, stdin io.Reader, stdout io.Writer, getenv func(string) s
 	events, err := capture.DecodeNDJSON(input)
 	if err != nil {
 		return err
+	}
+	events, err = sampling.Select(events, sampling.Config{
+		Rate: *sampleRate, Window: *sampleWindow, LowVolumeThreshold: *lowVolumeThreshold,
+		LowVolumeBoost: *lowVolumeBoost, Key: key,
+	})
+	if err != nil {
+		return err
+	}
+	if len(events) == 0 {
+		return errors.New("sampling selected no complete sessions; increase -sample-rate")
 	}
 	records, err := capture.Process(events, capture.Config{
 		OrganizationID: *organizationID, MasterKey: key, OperationTemplates: operationTemplates,

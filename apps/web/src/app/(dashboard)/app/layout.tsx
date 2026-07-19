@@ -1,9 +1,9 @@
-import { withAuth } from "@workos-inc/authkit-nextjs";
+import { dashboardAuth } from "@/services/dashboard-auth";
 
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  await withAuth({ ensureSignedIn: true });
+  await dashboardAuth();
 
   return children;
 }

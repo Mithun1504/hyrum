@@ -1,8 +1,10 @@
 import { sessionResponseSchema } from "@hyrum/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { advisoryRoutes } from "./advisories";
 import { assertionRoutes } from "./assertions";
 import { captureRoutes } from "./capture";
+import { corpusRoutes } from "./corpora";
 import { ledgerRoutes } from "./ledger";
 import { policyRoutes } from "./policies";
 import { progressRoutes } from "./progress";
@@ -44,8 +46,10 @@ export const v1Routes: FastifyPluginAsyncZod = async (app) => {
   );
 
   await app.register(captureRoutes);
+  await app.register(corpusRoutes);
   await app.register(ledgerRoutes);
   await app.register(assertionRoutes);
+  await app.register(advisoryRoutes);
   await app.register(policyRoutes);
   await app.register(replayRoutes);
   await app.register(specRoutes);

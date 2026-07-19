@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ModelAdvisoryWorkbench } from "@/components/workspace/model-advisory-workbench";
 import { cn } from "@/lib/utils";
 import type { EvidenceTier, LedgerRow, WorkspaceSnapshot } from "@/services/workspace-data";
 
@@ -59,7 +60,7 @@ export function OverviewView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               ))}
               {reviewQueue.length === 0 ? (
                 <p className="px-4 py-5 text-sm text-muted-foreground">
-                  Nothing is waiting in the loaded ledger window or assertion list.
+                  Nothing is waiting in the retained ledger or assertion list.
                 </p>
               ) : null}
             </div>
@@ -119,6 +120,7 @@ export function OverviewView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           </div>
         </OverviewPanel>
       </div>
+      <ModelAdvisoryWorkbench snapshot={snapshot} />
     </section>
   );
 }

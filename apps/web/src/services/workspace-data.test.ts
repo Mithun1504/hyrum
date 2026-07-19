@@ -13,6 +13,7 @@ const unavailableClient = {
   getLatestReplayRun: async () => Promise.reject(new Error("connection refused")),
   getWorkspaceSummary: async () => Promise.reject(new Error("connection refused")),
   listProgressEvents: async () => Promise.reject(new Error("connection refused")),
+  listReplayCorpora: async () => Promise.reject(new Error("connection refused")),
 };
 
 describe("workspace data", () => {
@@ -29,8 +30,8 @@ describe("workspace data", () => {
     const client = {
       health: async () => ({ status: "ok" as const }),
       session: async () => ({ role: "engineer" as const }),
-      listLedger: async () => [],
-      listConsumers: async () => [],
+      listLedger: async () => ({ entries: [], next_cursor: null, total: 0 }),
+      listConsumers: async () => ({ consumers: [], next_cursor: null, total: 0 }),
       getReceipt: unavailableClient.getReceipt,
       listAssertions: async () => [],
       getPolicy: async () => ({
@@ -93,6 +94,7 @@ describe("workspace data", () => {
         },
       }),
       listProgressEvents: async () => [],
+      listReplayCorpora: async () => [],
     };
 
     const snapshot = await getWorkspaceSnapshot(filters, { client });

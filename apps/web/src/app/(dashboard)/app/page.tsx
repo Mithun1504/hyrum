@@ -1,6 +1,6 @@
-import { withAuth } from "@workos-inc/authkit-nextjs";
 import { z } from "zod";
 import { normalizeView, WorkspaceShell } from "@/components/workspace/workspace-shell";
+import { dashboardAuth, e2eAuthBypassEnabled } from "@/services/dashboard-auth";
 import { getWorkspaceSnapshot, parseFilters } from "@/services/workspace-data";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
 
   const view = normalizeView(typeof params.view === "string" ? params.view : undefined);
   const replayRunId = view === "replay" ? z.string().uuid().safeParse(params.run).data : undefined;
-  const auth = await withAuth({ ensureSignedIn: true });
+  const auth = await dashboardAuth();
   const snapshot = await getWorkspaceSnapshot(parseFilters(urlSearchParams), {
     accessToken: auth.accessToken,
     replayRunId,
@@ -28,5 +28,12 @@ export default async function WorkspacePage({ searchParams }: WorkspacePageProps
   const actorLabel =
     [auth.user.firstName, auth.user.lastName].filter(Boolean).join(" ") || auth.user.email;
 
-  return <WorkspaceShell snapshot={snapshot} view={view} actorLabel={actorLabel} />;
+  return (
+    <WorkspaceShell
+      snapshot={snapshot}
+      view={view}
+      actorLabel={actorLabel}
+      authBypass={e2eAuthBypassEnabled()}
+    />
+  );
 }

@@ -3,13 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import type { LedgerRow, WorkspaceSnapshot } from "@/services/workspace-data";
 
 vi.mock("@/app/(dashboard)/app/actions", () => ({
+  addReplayCorpusItemAction: vi.fn(),
+  createReplayCorpusAction: vi.fn(),
   pinAssertionAction: vi.fn(),
+  resolveAssertionAction: vi.fn(),
+  updateReplayCorpusStatusAction: vi.fn(),
 }));
 vi.mock("@/components/workspace/assertion-pin-form", () => ({
   AssertionPinForm: () => null,
 }));
 vi.mock("@/components/workspace/spec-draft-form", () => ({
   SpecDraftForm: () => null,
+}));
+vi.mock("@/components/workspace/assertion-resolution-form", () => ({
+  AssertionResolutionForm: () => null,
 }));
 
 import { AssertionsView } from "./assertion-replay-views";
@@ -26,7 +33,13 @@ describe("AssertionsView", () => {
             dataErrors: [],
             role: "engineer",
             summary: null,
-            permissions: { canPinAssertion: true, reason: null },
+            permissions: {
+              canPinAssertion: true,
+              canOverrideClaim: true,
+              canManagePolicy: false,
+              canManageCorpus: true,
+              reason: null,
+            },
             filters: { query: "", selectedId: selected.id, tier: "all", kind: "all", state: "all" },
             consumers: [],
             allLedgerRows: [selected],
@@ -42,9 +55,15 @@ describe("AssertionsView", () => {
                 reason: "Migration review expired.",
                 status: "expired",
                 expires_at: "2026-07-14T08:00:00.000Z",
+                resolution_type: null,
+                resolution_reason: null,
+                resolved_by: null,
+                resolved_at: null,
+                customer_notice: null,
               },
             ],
             gatePolicy: null,
+            replayCorpora: [],
             replayReport: null,
             progressEvents: [],
             defaultAssertionExpiry: "2026-10-13T08:00:00.000Z",

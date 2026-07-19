@@ -52,6 +52,11 @@ func run(ctx context.Context, args []string, stdout io.Writer, getenv func(strin
 	if err != nil {
 		return err
 	}
+	config, cleanup, err := replay.StartDockerIsolation(ctx, config, replay.ExecDocker{})
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	value, err := (replay.Runner{}).Run(ctx, config)
 	if err != nil {
 		return err

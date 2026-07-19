@@ -8,6 +8,8 @@ const workosConfigured = Boolean(
     process.env.WORKOS_COOKIE_PASSWORD &&
     process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
 );
+const e2eBypass =
+  process.env.NODE_ENV !== "production" && process.env.HYRUM_E2E_AUTH_BYPASS === "1";
 export default workosConfigured
   ? authkitProxy({
       middlewareAuth: {
@@ -15,23 +17,27 @@ export default workosConfigured
         unauthenticatedPaths: ["/", "/api/health", "/sign-in", "/auth/callback"],
       },
     })
-  : function unconfiguredAuthProxy(request: NextRequest) {
-      const protectedPath =
-        request.nextUrl.pathname.startsWith("/app") ||
-        request.nextUrl.pathname.startsWith("/sign-in") ||
-        request.nextUrl.pathname.startsWith("/auth/callback");
-      if (protectedPath) {
-        return NextResponse.json(
-          {
-            title: "Authentication unavailable",
-            status: 503,
-            detail: "WorkOS AuthKit is not configured",
-          },
-          { status: 503 },
-        );
+  : e2eBypass
+    ? function e2eAuthProxy() {
+        return NextResponse.next();
       }
-      return NextResponse.next();
-    };
+    : function unconfiguredAuthProxy(request: NextRequest) {
+        const protectedPath =
+          request.nextUrl.pathname.startsWith("/app") ||
+          request.nextUrl.pathname.startsWith("/sign-in") ||
+          request.nextUrl.pathname.startsWith("/auth/callback");
+        if (protectedPath) {
+          return NextResponse.json(
+            {
+              title: "Authentication unavailable",
+              status: 503,
+              detail: "WorkOS AuthKit is not configured",
+            },
+            { status: 503 },
+          );
+        }
+        return NextResponse.next();
+      };
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],

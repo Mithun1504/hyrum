@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type {
   EvidenceTier,
   LedgerRow,
@@ -7,6 +7,11 @@ import type {
   WorkspaceSnapshot,
 } from "@/services/workspace-data";
 import { GateView } from "./behavior-gate-views";
+
+vi.mock("@/app/(dashboard)/app/actions", () => ({
+  overrideClaimAction: vi.fn(),
+  pinAssertionAction: vi.fn(),
+}));
 
 const claimIds = {
   T1: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1",
@@ -79,7 +84,13 @@ function snapshotWithDeltas(deltas: ReplayDelta[]): WorkspaceSnapshot {
     dataErrors: [],
     role: "engineer",
     summary: null,
-    permissions: { canPinAssertion: true, reason: null },
+    permissions: {
+      canPinAssertion: true,
+      canOverrideClaim: true,
+      canManagePolicy: true,
+      canManageCorpus: true,
+      reason: null,
+    },
     filters: { query: "", selectedId: null, tier: "all", kind: "all", state: "all" },
     consumers: [],
     allLedgerRows: (Object.keys(claimIds) as EvidenceTier[]).map((tier) => ledgerRow(tier)),
@@ -94,6 +105,7 @@ function snapshotWithDeltas(deltas: ReplayDelta[]): WorkspaceSnapshot {
       warn_tiers: ["T2"],
       active: true,
     },
+    replayCorpora: [],
     replayReport: {
       id: "77777777-7777-4777-8777-777777777777",
       generated_at: "2026-07-15T08:00:00.000Z",

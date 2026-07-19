@@ -131,13 +131,41 @@ pnpm test:e2e
 pnpm demo:acceptance
 ```
 
+The acceptance run ingests and evaluates the complete deterministic 50,000-event fixture in bounded
+batches. It verifies that every accepted event reaches the tenant ledger before running signed
+differential replay and the deterministic gate. The same end-to-end scenario runs weekly and on
+demand in `.github/workflows/acceptance.yml`.
+
+Run the database-failure resilience scenario with the dedicated Toxiproxy profile:
+
+```bash
+docker compose --profile resilience up -d toxiproxy
+pnpm test:resilience
+docker compose --profile resilience stop toxiproxy
+```
+
+The script proves readiness degradation, bounded request failure, and automatic recovery after the
+database connection is restored. Load-test thresholds and scenarios live in `tests/load`; validate
+the script locally with:
+
+```bash
+docker run --rm -v "$PWD:/workspace" -w /workspace \
+  grafana/k6:0.54.0 inspect tests/load/capture.js
+```
+
+Run it against an isolated, seeded environment before a release; never point destructive or
+write-heavy scenarios at a shared production tenant.
+
 The public smoke flow is browser → Next.js page → themed component rendering. The service smoke flow
 is HTTP → Fastify validation/error handling → health response; `/ready` adds a real Postgres boundary.
 The acceptance harness exercises machine authentication, tenant scoping, Argon2id token rotation,
 MinIO, real capture ingestion, ledger population, signed replay ingestion, and the deterministic
 gate, including signed coverage for active compatibility assertions. WorkOS, OpenAI, GitHub, and
-Slack need external credentials and are deliberately not contacted by that local run; their
-boundaries are covered by schema and package tests.
+Slack need external sandbox credentials and are deliberately not contacted by that local run. Their
+mocked boundaries run in the ordinary test suite, and the opt-in `live-integrations` CI job exercises
+the real providers only when the corresponding repository environment and secrets are configured.
+OpenAI advisory-role tests use redacted receipt evidence and `store: false`; model output never owns
+fingerprints, evidence tiers, replay facts, or gate decisions.
 
 ## Adding a feature
 

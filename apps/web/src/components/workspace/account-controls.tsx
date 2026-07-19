@@ -4,7 +4,21 @@ import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
-export function AccountControls({ label }: { label: string }) {
+export function AccountControls({ label, authBypass }: { label: string; authBypass: boolean }) {
+  if (authBypass) {
+    return (
+      <div className="grid gap-2">
+        <b className="truncate text-foreground" title={label}>
+          {label}
+        </b>
+        <span className="text-xs text-muted-foreground">Test session</span>
+      </div>
+    );
+  }
+  return <AuthenticatedAccountControls label={label} />;
+}
+
+function AuthenticatedAccountControls({ label }: { label: string }) {
   const { signOut } = useAuth();
   const [pending, setPending] = useState(false);
 

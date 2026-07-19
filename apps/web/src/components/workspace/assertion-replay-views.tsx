@@ -1,6 +1,8 @@
 import { CheckCircle2, Clock, type LucideIcon, ShieldAlert } from "lucide-react";
-import { pinAssertionAction } from "@/app/(dashboard)/app/actions";
+import { pinAssertionAction, resolveAssertionAction } from "@/app/(dashboard)/app/actions";
 import { AssertionPinForm } from "@/components/workspace/assertion-pin-form";
+import { AssertionResolutionForm } from "@/components/workspace/assertion-resolution-form";
+import { CorpusManager } from "@/components/workspace/corpus-manager";
 import { SpecDraftForm } from "@/components/workspace/spec-draft-form";
 import { OutcomeBadge, TierBadge } from "@/components/workspace/tier-badge";
 import { EmptyPanel, PageIntro } from "@/components/workspace/workspace-primitives";
@@ -51,6 +53,7 @@ export function AssertionsView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
               assertion={assertion}
               selectedCount={matchingAssertions.length}
               canDraft={snapshot.permissions.canPinAssertion}
+              canResolve={snapshot.permissions.canPinAssertion}
             />
             <SelectedBehavior snapshot={snapshot} />
           </div>
@@ -145,6 +148,12 @@ export function ReplayView({ snapshot }: { snapshot: WorkspaceSnapshot }) {
           description="No signed replay report has been ingested for this organization yet."
         />
       )}
+      <div className="mt-4">
+        <CorpusManager
+          corpora={snapshot.replayCorpora}
+          canManage={snapshot.permissions.canManageCorpus}
+        />
+      </div>
     </>
   );
 }
@@ -153,10 +162,12 @@ function AssertionDetail({
   assertion,
   selectedCount,
   canDraft,
+  canResolve,
 }: {
   assertion: Assertion | undefined;
   selectedCount: number;
   canDraft: boolean;
+  canResolve: boolean;
 }) {
   return (
     <div className="min-w-0">
@@ -176,6 +187,9 @@ function AssertionDetail({
           label="reason"
           value={assertion?.reason ?? "Select a ledger behavior, then pin it."}
         />
+        {assertion?.resolution_reason ? (
+          <Fact label="resolution" value={assertion.resolution_reason} />
+        ) : null}
         <Fact label="enforcement" value={assertion ? "Replay test on every CI run" : "None"} />
         <Fact label="expires" value={assertion ? formatDate(assertion.expires_at) : "—"} />
       </dl>
@@ -186,6 +200,47 @@ function AssertionDetail({
         </p>
       ) : null}
       {assertion ? <SpecDraftForm assertionId={assertion.id} canDraft={canDraft} /> : null}
+      {assertion && assertion.status !== "resolved" ? (
+        <AssertionResolutionForm
+          assertionId={assertion.id}
+          canResolve={canResolve}
+          action={resolveAssertionAction}
+        />
+      ) : null}
+      {assertion?.customer_notice ? (
+        <div className="mt-5 rounded-[4px] border border-tier-pattern/40 bg-tier-pattern/10 p-3 text-xs">
+          <div className="font-semibold">{assertion.customer_notice.subject}</div>
+          <p className="mt-1 text-muted-foreground">{assertion.customer_notice.summary}</p>
+          <p className="mt-3 whitespace-pre-wrap text-foreground">
+            {assertion.customer_notice.body}
+          </p>
+          <div className="mt-3 border-t border-tier-pattern/25 pt-3">
+            <div className="font-semibold">
+              Consumer impact ({assertion.customer_notice.impacted_consumers.length})
+            </div>
+            {assertion.customer_notice.impacted_consumers.length ? (
+              <ul className="mt-2 grid gap-2">
+                {assertion.customer_notice.impacted_consumers.map((consumer) => (
+                  <li key={consumer.consumer_id} className="rounded-[4px] border border-border p-2">
+                    <span className="font-medium">{consumer.display_alias}</span>
+                    <span className="ml-2 font-mono text-muted-foreground">{consumer.tier}</span>
+                    <div className="mt-1 text-muted-foreground">
+                      {consumer.endpoints.join(", ") || "Endpoint unavailable"}
+                      {consumer.observation_count === null
+                        ? ""
+                        : ` · ${consumer.observation_count} observations`}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-muted-foreground">
+                No receipt-backed consumers are currently affected.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "assertions" ADD CONSTRAINT "assertions_resolution_type_valid" CHECK ("assertions"."resolution_type" IS NULL OR "assertions"."resolution_type" IN ('documented', 'extended', 'scheduled_break'));--> statement-breakpoint
+ALTER TABLE "replay_corpora" ADD CONSTRAINT "replay_corpora_curation_status_valid" CHECK ("replay_corpora"."curation_status" IN ('draft', 'ready', 'archived'));

@@ -1,0 +1,51 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.24.x"
+          cache: true
+      - run: pnpm install --frozen-lockfile
+      - name: JavaScript dependency audit
+        run: pnpm audit --audit-level high
+      - name: Go vulnerability database
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      - name: Semgrep security rules
+        run: docker run --rm --volume "$PWD:/src" returntocorp/semgrep:1.131.0 semgrep scan --config p/security-audit --error /src
+      - name: Filesystem vulnerabilities and secrets
+        run: docker run --rm --volume "$PWD:/workspace" aquasec/trivy:0.66.0 fs --exit-code 1 --severity HIGH,CRITICAL --scanners vuln,secret /workspace
+      - name: Build production image
+        run: docker build --file infra/docker/control-plane.Dockerfile --tag hyrum-control-plane:security .
+      - name: Image vulnerability scan
+        run: docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.66.0 image --exit-code 1 --severity HIGH,CRITICAL hyrum-control-plane:security
+      - name: Generate CycloneDX SBOM
+        run: docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock --volume "$PWD:/out" anchore/syft:v1.33.0 hyrum-control-plane:security -o cyclonedx-json=/out/hyrum-control-plane.sbom.json
+      - name: Retain signed-build input inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hyrum-control-plane-sbom
+          path: hyrum-control-plane.sbom.json
+          if-no-files-found: error
+          retention-days: 30
