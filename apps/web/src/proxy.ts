@@ -14,7 +14,16 @@ export default workosConfigured
   ? authkitProxy({
       middlewareAuth: {
         enabled: true,
-        unauthenticatedPaths: ["/", "/api/health", "/sign-in", "/auth/callback"],
+        unauthenticatedPaths: [
+          "/",
+          "/api/health",
+          "/sign-in",
+          "/auth/callback",
+          "/icon",
+          "/opengraph-image",
+          "/robots.txt",
+          "/sitemap.xml",
+        ],
       },
     })
   : e2eBypass
