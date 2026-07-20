@@ -1,16 +1,26 @@
 # Contributing
 
-Use short-lived branches from `main` and keep pull requests focused. Before coding, read
-`docs/PRD.md`, `docs/TECH_STACK.md`, and the closest `AGENTS.md`.
+Create a short-lived branch from `main` and keep the pull request focused. Read
+[`docs/PRD.md`](docs/PRD.md), [`docs/TECH_STACK.md`](docs/TECH_STACK.md), and the closest
+`AGENTS.md` before changing code.
 
-## Pull request checklist
+## Requirements
 
-- The change stays within the approved architecture and does not weaken deterministic gate ownership.
-- New tenant data is organization-scoped and authorization is tested.
-- New environment variables are documented in `.env.example`.
-- Schema changes include generated forward-compatible migrations.
-- Logs and test fixtures contain no raw secrets or customer traffic.
-- `pnpm verify`, `go test ./...`, and relevant browser/integration tests pass.
-- User-visible states include accessible loading, empty, error, and success treatment where relevant.
+- Keep deterministic extraction and replay in control of behavior facts and gate decisions.
+- Pass `organization_id` through every tenant-owned API, job, repository, and storage boundary.
+- Validate untrusted input at the boundary. Do not log bodies, secrets, credentials, signed URLs,
+  or full prompts.
+- Commit generated Drizzle migrations for schema changes.
+- Document new environment variables in `.env.example`.
+- Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
 
-Use conventional commits where practical: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, and `refactor:`.
+## Before opening a pull request
+
+```bash
+pnpm verify
+pnpm test:e2e # when a browser flow changes
+pnpm demo:acceptance # when capture, replay, or gate behavior changes
+git diff --check
+```
+
+The pull request should state why the change is needed, how it works, and which commands passed.

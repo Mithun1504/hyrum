@@ -1,208 +1,128 @@
-# Hyrum — PRD & Spec
+# Product requirements
 
-**Track:** Developer tools
-**One-liner:** The ledger of your API's accidental contracts. Hyrum watches
-production traffic, finds the undocumented behaviors consumers actually depend
-on (Hyrum's Law), and gates changes on them — with traffic receipts, before
-the outage instead of after.
+Hyrum finds undocumented API behavior that consumers rely on and tests proposed changes against it.
 
-*Rev 2 — after external review (sol, 2026-07-14): the change gate is now a
-differential replay harness, not an LLM/static-analysis oracle; capture
-samples by consumer-session to preserve the sequences dependency inference
-needs; timing behaviors cut; T1 tightened to echo-evidence; demo made
-internally consistent; dependency recall added to metrics.*
+## Problem
 
-## 1. Problem
+OpenAPI records declared contracts. Consumers also learn from observable behavior: field presence,
+nullability, ordering, undocumented values, and error templates. Teams usually discover these
+accidental contracts after a breaking release.
 
-Hyrum's Law (Hyrum Wright, Google): with enough users, every observable
-behavior of your API will be depended on by somebody, regardless of what you
-documented. Result ordering nobody promised but a customer's pagination
-assumes. An error string a customer's regex parses. A field one client reads
-as null and another expects absent.
+Existing contract and spec-diff tools check what a team declared. Hyrum records what each consumer
+observed, distinguishes exposure from evidence of reliance, and checks candidate builds before
+merge.
 
-None of this is in the OpenAPI spec, so nothing guards it. Contract-testing
-tools (Pact) verify *declared* contracts. Spec-drift tools diff traffic
-against the spec you wrote. Breaking-change detectors (oasdiff, Speakeasy)
-diff spec versions. The contract you created *by accident* — the one that
-causes the incident — has no tooling. Today the ledger of accidental
-contracts is discovered one outage at a time.
+## Users
 
-## 2. Users & buyer
+- **Primary:** platform and API team leads responsible for external compatibility.
+- **Secondary:** developer experience, API support, and SRE teams reviewing impact and evidence.
+- **Initial customer:** a B2B company with at least 50 external API consumers, a controllable
+  gateway or log pipeline, and containerized API builds.
 
-- **Primary — platform/API team lead** at a B2B company whose API is the
-  product or a major surface (fintech, infra, SaaS with public API). Owns
-  "don't break customers" and currently does it with folklore.
-- **Secondary — API support/DX engineers** (blast-radius answers before
-  deprecations), **SRE** (change-risk signal).
-- ICP v1: companies with ≥ 50 external API consumers, a gateway they control
-  (Kong, Envoy, or a log pipeline), and a containerizable API build (needed
-  for replay, §4.4).
+## Product requirements
 
-## 3. Goals / non-goals
+1. Build a per-consumer ledger of behavior not declared in OpenAPI.
+2. Attach redacted receipts and an evidence tier to every claim.
+3. Replay a representative corpus against base and candidate builds.
+4. Match stable behavior deltas to affected consumers and their evidence.
+5. Apply a tenant policy: T1 may block, T2 may warn, and T3 never blocks.
+6. Turn pinned behavior into owned, expiring compatibility assertions.
+7. Measure T1 precision and recall. An empty ledger does not count as safe.
 
-**Goals**
-- G1: Build a per-consumer ledger of observed, depended-on behaviors that the
-  spec doesn't declare.
-- G2: Gate proposed changes in CI via **differential replay**: prove which
-  observable behaviors a candidate build changes, then report which consumers
-  depend on them, with traffic evidence.
-- G3: Every dependency claim carries receipts (sampled request/response
-  sequences, redacted) and an evidence tier. Both precision *and recall* of
-  dependency claims are measured — a ledger that stays safe by claiming
-  nothing is a failed ledger.
-- G4: Assertions expire by design — each accidental contract moves toward
-  "documented" or "deliberately broken with notice," never silent permanence.
+## Evidence model
 
-**Non-goals**
-- Not an API gateway, not an observability platform, not error tracking.
-- Does not block traffic or modify responses in v1 (observe + gate only).
-- Not for internal-only microservice meshes in v1.
-- No timing/latency behaviors in the ledger (see §4.1 — cut as noise).
+| Tier | Meaning | Gate effect |
+| --- | --- | --- |
+| **T1: echo evidence** | A response-only value appears in a later request from the same complete consumer session. | Eligible to block under policy. |
+| **T2: pattern evidence** | Request behavior changes with an observed response pattern, but reliance is not proven. | Warn only. |
+| **T3: exposure** | A consumer received the behavior. | Never blocks and is not called a dependency. |
 
-## 4. How detection works (the core spec)
+Humans may override a claim with an auditable reason. Overrides do not change the underlying
+receipt.
 
-### 4.1 Behavior extraction (from sampled traffic)
-Per endpoint × consumer (API key/client id), compute behavioral fingerprints:
-- **Shape:** fields present/absent/null patterns, casing, types, enum values
-  observed, undocumented fields returned.
-- **Ordering:** stability of array ordering across paginated calls.
-- **Errors:** status × error-body string templates (clustered), which
-  consumers receive which.
-- Deterministic extractors; LLM used only to cluster/name behaviors and
-  draft human-readable descriptions.
-- Explicitly excluded: response-time and retry-timing distributions. They
-  are dominated by infrastructure and client libraries; without controlled
-  variation they produce noise, not contracts.
+## Behavior extraction
 
-### 4.2 Dependency inference (the hard part — tiered)
-A consumer *receiving* a behavior ≠ *depending* on it. Evidence tiers:
-- **T1 — echo evidence:** a value that exists only in the undocumented
-  behavior reappears in the consumer's subsequent requests (client paginates
-  using an undocumented cursor field; a follow-up call echoes an
-  undocumented response value). Requires captured request *sequences*
-  (§5). This is the only tier that gates.
-- **T2 — pattern evidence:** the consumer's request behavior co-varies with
-  the behavior when it varies naturally (canary windows, regional
-  differences), or behavior-conditional branching is evident (e.g., retry
-  patterns that differ by error *template* where status code alone can't
-  explain the difference — suggestive, never proof; status-based retry
-  logic produces the same traffic).
-- **T3 — exposure only:** consumer receives the behavior at volume; no
-  reliance signal. Reported as exposure, never as dependency.
-- GPT 5.6 role: given fingerprint diffs + captured sequences, classify
-  candidate dependencies into tiers with cited samples; humans promote/
-  demote with one click (feedback trains thresholds). Tier definitions are
-  deterministic; the LLM proposes, the rules dispose.
+For each endpoint and consumer, deterministic extractors record:
 
-### 4.3 Spec subtraction
-Diff observed behaviors against the declared OpenAPI spec; only *undeclared*
-behaviors enter the ledger. Declared-contract violations are someone else's
-product.
+- present, absent, null, type, casing, enum-like values, and undeclared fields;
+- array ordering when pagination context exists;
+- status and normalized error templates.
 
-### 4.4 Change gate — differential replay (CI)
-The gate never predicts; it **measures**:
-1. CI builds base and candidate images of the API.
-2. Hyrum replays a redacted, deduplicated request corpus (curated from
-   captured traffic: per endpoint × consumer × behavior-class coverage,
-   not raw volume) against both builds in an isolated environment — side
-   effects stubbed or run against a disposable fixture DB; non-idempotent
-   endpoints replayed against fixtures only.
-3. Deterministic diff of observable behavior between builds: shape, values,
-   ordering, error templates. Nondeterministic fields (timestamps, ids) are
-   masked by the same extractors as §4.1.
-4. Proven deltas are matched against the ledger → report: consumers
-   affected × evidence tier × receipts.
-5. GPT 5.6 role: select/prioritize which corpus slices to replay for a given
-   diff (cheap prefilter), and write the human-readable impact explanation.
-   It never decides *whether* a behavior changed — the replay diff does.
-Policy: block on T1-matched deltas, warn on T2, note T3-exposure. Fully
-configurable per team.
+Timing and latency are excluded. Capture and replay must use the same versioned extractor and mask
+configuration.
 
-### 4.5 Assertions & lifecycle
-- Pinning a behavior creates a compatibility assertion: owner, reason,
-  expiry (default 90 days). Assertions become replay test cases — every CI
-  run re-verifies them by construction.
-- At expiry: prompt to document (PR against the spec, drafted by Hyrum),
-  extend with justification, or schedule a deliberate break (Hyrum drafts
-  the customer notice with per-consumer impact).
+Only behavior missing from the uploaded OpenAPI document enters the accidental-contract ledger.
 
-## 5. Architecture
+## Capture and privacy
 
-- **Capture:** gateway plugin (Kong/Envoy filter) or log-pipeline tap.
-  **Sampling is session-correlated, not per-request:** sample by consumer ×
-  time-window (e.g., all traffic for a sampled consumer-session), so the
-  request sequences T1 inference needs survive sampling. Low-volume
-  consumers get boosted sampling rates (their sequences are rarer). PII
-  redaction at capture (structural hashing of values; only shapes,
-  templates, and redacted samples leave the VPC — self-hosted capture
-  agent, SaaS control plane).
-- **Store:** fingerprint aggregates in Postgres; redacted samples and replay
-  corpus in object storage with TTL; ledger + assertions in Postgres.
-  Ledger entries carry observation freshness; behaviors unobserved for 90
-  days are marked stale and downgraded.
-- **Replay harness:** containerized runner (CI-side or Hyrum-hosted),
-  fixture DB seeding, side-effect stubbing config per service.
-- **Analysis:** streaming fingerprint jobs; nightly dependency-inference
-  runs; replay on PR.
-- **Surfaces:** web app (ledger, consumer drill-down, assertion lifecycle),
-  GitHub App (change-gate checks on PRs), Slack notifications, API.
+- Sample complete consumer sessions, not isolated requests.
+- Preserve sequence numbers and completeness so T1 can be proved.
+- Boost low-volume consumers when sampling.
+- Redact bodies, credentials, cookies, signed values, and configured sensitive paths before egress.
+- Derive consumer identity with tenant-keyed HMAC and discard the source credential.
+- Store aggregates in Postgres and redacted, expiring artifacts in object storage.
+- Mark unobserved behavior stale after 90 days without deleting its history.
 
-## 6. Hackathon vertical slice
+Capture failures must never interrupt customer traffic.
 
-Demo API (small e-commerce API, 8 endpoints) + three scripted fake consumers:
-consumer A paginates via undocumented `next_cursor` (T1 — the echo is in its
-follow-up requests); consumer B branches on the 422 error template where
-status alone can't explain it (T2); consumer C merely receives an
-undocumented `legacy_id` field (T3). **Pitch discipline: consumers are
-scripts and say so; what's real is capture → ledger → replay → gate.**
+## Differential replay
 
-Demo script (≈ 4 min):
-1. Replay 50k captured requests through extraction; ledger populates live —
-   behaviors clustered, consumers attached, tiers assigned with receipts
-   shown (A's echoed cursor on screen).
-2. Open a PR that renames `next_cursor` to `cursor` **and** rewords the 422
-   error template.
-3. Differential replay runs in CI: base vs candidate, deterministic deltas
-   found (two behaviors changed). Gate report: consumer A **blocked** (T1,
-   receipt: the follow-up request that echoes the old field), consumer B
-   **warned** (T2, receipt: the branching pattern), consumer C **not
-   flagged** — say the false-positive discipline out loud.
-4. Pin the error template → assertion with 90-day expiry, which is now a
-   permanent replay test → Hyrum drafts the spec PR that would document it.
+1. CI identifies immutable base and candidate images.
+2. Hyrum selects a redacted corpus by endpoint, consumer, and behavior coverage.
+3. The runner starts both images in isolated Docker networks with the same fixtures and stubs.
+4. It sends identical requests, applies deterministic masks, and compares observable results.
+5. It repeats changed cases. Unstable results are quarantined and cannot block.
+6. It signs the report. The control plane verifies the signature and recomputes the decision.
 
-Real: extractors, session-correlated capture, tiering, replay harness, gate.
-Scripted: the consumers (declared).
+Write endpoints require a disposable database and explicit side-effect stubs. Public egress is off
+by default.
 
-## 7. Success metrics
+## Assertions
 
-- **Precision ≥ 95% AND recall measured** on T1 dependency claims against a
-  labeled corpus (planted dependencies in pilot traffic + retro-labeled real
-  ones). Reporting precision without recall is prohibited by G3.
-- Replay determinism: % of replay diffs that are stable across repeated runs
-  (target ≥ 99% — flaky diffs kill the gate exactly like flaky tests).
-- Breaks caught: retro-validation against pilot customers' past incidents.
-- Assertion lifecycle health: % resolved at expiry (documented or
-  deliberately broken) vs auto-extended.
-- Time-to-ledger: < 1 week of traffic to first useful ledger.
+Pinning behavior creates an assertion with an owner, reason, and expiry. Every replay must report
+signed coverage for active assertions; missing or failed coverage blocks.
 
-## 8. Risks & mitigations
+At expiry, an owner must:
 
-| Risk | Mitigation |
-|---|---|
-| False positives → ignored gate | Tier gate (block only on T1 echo-evidence), receipts mandatory, one-click demote feeding thresholds |
-| Replay environment cost/complexity (fixtures, side effects) | Start with read-path endpoints (most accidental contracts live in responses); side-effect config is explicit onboarding, not magic; Hyrum-hosted runner option |
-| Nondeterministic APIs → flaky replay diffs | Masking extractors, repeated-run stability metric, quarantine flaky endpoints from the gate |
-| Privacy/compliance on traffic capture | Self-hosted capture, structural fingerprints not payloads, redaction before egress, TTL on samples and corpus |
-| Sampling misses low-volume consumers' sequences | Session-correlated sampling with low-volume boost (§5) |
-| Incumbent adjacency (Speakeasy/Optic add observed-behavior features) | They diff against declared specs; per-consumer dependency inference + replay corpus is a different data asset. Move fast on the ledger moat |
-| Assertions calcify the accident | Expiry mandatory and non-silent (G4); assertions are living replay tests, so staleness is visible |
+- document the behavior;
+- extend the assertion with a reason; or
+- schedule a deliberate break and customer notice.
 
-## 9. Open questions
+## AI boundary
 
-- Replay for write-path endpoints: fixture-DB seeding strategy per customer,
-  or read-path-only for the first year?
-- Internal-mesh version (service-to-service Hyrum's Law) — separate product
-  or v3 surface?
-- Should Hyrum eventually *drive* controlled canary variation to upgrade T2
-  evidence to proof (v3, invasive)?
-- Pricing axis: per monitored endpoint, per consumer, or per gated repo?
+GPT-5.6 may cluster and name extracted behavior, propose tiers, rank replay cases, explain impact,
+draft OpenAPI changes, or draft notices. Every result is schema-validated and advisory.
+
+The model cannot create behavior facts, promote unsupported evidence to T1, alter replay results, or
+set a gate decision.
+
+## Product surfaces
+
+- Web workspace for capture status, ledger review, consumers, endpoints, gates, assertions, replay,
+  and policy.
+- Control-plane API and progress stream.
+- GitHub checks for pull-request decisions.
+- Slack notifications for review and lifecycle events.
+- Go capture and replay binaries.
+
+## Non-goals
+
+- API gateway, observability platform, or error tracker.
+- Traffic blocking or response modification.
+- Timing and latency contracts.
+- Internal service meshes in the current version.
+- Kubernetes or Kafka in the current architecture.
+
+## Success measures
+
+- T1 precision of at least 95%, with recall reported on the same labeled corpus.
+- Stable output for at least 99% of replayed deltas.
+- First useful ledger within one week of traffic.
+- Pilot incidents caught in retrospective replay.
+- Expired assertions resolved by documentation or a planned break rather than silent extension.
+
+## Open decisions
+
+- Scope of write-path replay during the first production pilot.
+- Pricing by monitored endpoint, consumer, gated repository, or a combination.
+- Whether controlled canary variation should later upgrade T2 evidence.

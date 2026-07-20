@@ -1,53 +1,58 @@
-# Development Guide
+# Development
 
-## Prerequisites
+## Requirements
 
-- Node.js 22 LTS (`.nvmrc` and `.tool-versions` are provided)
-- Corepack and pnpm 10.33.0
-- Go 1.24 or newer
-- Docker Desktop or Docker Engine with Compose v2
-- A WorkOS AuthKit application for authenticated pages
-- Optional OpenAI, GitHub App, Slack App, R2, Sentry, and OTLP credentials
+- Node.js 22 LTS
+- pnpm 10.33.0 through Corepack
+- Go 1.24+
+- Docker Compose v2
+- WorkOS AuthKit for authenticated pages
 
-## First-time setup
+OpenAI, GitHub, Slack, R2, Sentry, and OTLP credentials are optional for local development.
+
+## Setup
 
 ```bash
 corepack enable
-pnpm install
+corepack prepare pnpm@10.33.0 --activate
+pnpm install --frozen-lockfile
 cp .env.example .env.local
 docker compose up -d postgres minio minio-init wiremock
-pnpm db:generate
 pnpm db:migrate
 pnpm dev
 ```
 
-Use 1Password CLI or the team's approved secret manager for real credentials. The root
-`.env.local` is loaded by `pnpm dev` and `pnpm db:migrate`; environment files are ignored and
-`.env.example` is the only one committed to source control.
+The root `.env.local` is loaded by `pnpm dev` and database commands. Keep real credentials in an
+approved secret manager. Commit only `.env.example`.
+
+## Services
+
+| Service       | Address                      |
+| ------------- | ---------------------------- |
+| Web           | <http://localhost:3000>      |
+| Control plane | <http://localhost:4000>      |
+| OpenAPI       | <http://localhost:4000/docs> |
+| MinIO API     | <http://localhost:9000>      |
+| MinIO console | <http://localhost:9001>      |
 
 ## WorkOS AuthKit
 
-Create an AuthKit application and configure:
+Create an AuthKit application with:
 
 - Redirect URI: `http://localhost:3000/auth/callback`
 - Sign-in endpoint: `http://localhost:3000/sign-in`
-- Homepage URL: `http://localhost:3000`
+- Homepage: `http://localhost:3000`
 
 Set `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, and
 `NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The cookie password must contain at least 32 random characters.
-The `/app` route is secure by default through `apps/web/src/proxy.ts` and validates the session again
-inside its Server Component layout.
 
-The control-plane bearer-token verifier is deny-by-default. It verifies the WorkOS session-token
-signature and issuer, then requires the token `client_id` claim to exactly match `WORKOS_CLIENT_ID`.
-`WORKOS_JWKS_URL` is optional; by default the verifier uses WorkOS' client-scoped session JWKS URL.
-Product authorization remains in Hyrum's database; WorkOS supplies identity and organization context
-only.
+`/app` is protected by `apps/web/src/proxy.ts` and its server layout. The control plane verifies the
+WorkOS token signature, issuer, and `client_id`; Hyrum remains responsible for roles and tenant
+authorization.
 
 ## Database and jobs
 
-Drizzle schema source is `packages/db/src/schema.ts`; generated SQL migrations are committed under
-`packages/db/migrations`.
+The Drizzle schema is in `packages/db/src`. Generated SQL lives in `packages/db/migrations`.
 
 ```bash
 pnpm db:generate
@@ -55,123 +60,56 @@ pnpm db:migrate
 pnpm db:studio
 ```
 
-The worker uses a durable Postgres table and `FOR UPDATE SKIP LOCKED`. Current handlers expire due
-assertions, downgrade stale ledger entries, delete expired receipt objects, and publish transactional
-outbox records. Handlers must remain idempotent, tenant-scoped, bounded, and registered by explicit
-job type. Redis is not part of the approved architecture.
+Production workers use `WORKER_DATABASE_URL` with the migration-managed `hyrum_worker` role. The
+control plane and worker must not share credentials. Jobs use Postgres row locking and a
+transactional outbox; Redis is not part of the architecture.
 
-Production workers must use `WORKER_DATABASE_URL` with a dedicated non-superuser login that is a
-member of the migration-managed `hyrum_worker` role. The control plane and worker must not share
-credentials. The worker role can claim jobs and outbox records across organizations, while handler
-work still runs inside an explicit tenant transaction. Local development falls back to
-`DATABASE_URL` when `WORKER_DATABASE_URL` is unset.
-
-Postgres row-level security is forced on tenant tables. Request and worker transactions set only the
-narrow, transaction-local identity needed by their policy. Application authorization remains
-mandatory; RLS is containment if an application query misses its tenant predicate.
+Tenant tables force row-level security. Application authorization is still required.
 
 ## Object storage
 
-Redacted receipt bundles and uploaded OpenAPI documents use the S3-compatible `@hyrum/storage`
-package. Local development targets MinIO; hosted deployments target R2 or another compatible store.
-Keys are generated as tenant-prefixed content digests and cannot include caller-controlled path
-segments.
+`@hyrum/storage` stores redacted receipt bundles and OpenAPI documents through the S3 API. Local
+development uses MinIO; hosted environments use R2 or another compatible service. Keys are
+tenant-prefixed content digests and never contain caller-controlled paths.
 
-The local defaults match `compose.yaml`: endpoint `http://127.0.0.1:9000`, bucket
-`hyrum-development`, and path-style requests. Production configuration rejects the local endpoint,
-bucket, and credentials. Receipt metadata and its small redacted excerpt remain available if object
-storage is temporarily unavailable; `object_key` is null so the UI reports the missing durable
-bundle instead of pretending it exists.
+If object storage is unavailable, receipt metadata and its small redacted excerpt remain readable.
+The UI must report that the durable bundle is unavailable.
 
-## UI and design system
+## API rules
 
-shadcn/ui source lives in `apps/web/src/components/ui`. Product components live one level above it;
-feature-local components should live near their route or feature. Add primitives from the web app:
+- Public routes live under `/v1`.
+- Zod schemas define requests, responses, and OpenAPI 3.1 output.
+- Errors use RFC 9457 problem details.
+- Machine ingestion uses scoped Hyrum credentials.
+- Webhooks verify the raw body before parsing.
+- Logs exclude bodies, cookies, authorization headers, signed URLs, and prompts.
+
+Agent tokens use Argon2id hashes with a lookup prefix. Legacy `sha256:` hashes are upgraded after a
+successful authentication and should be rotated if they never authenticate.
+
+## Frontend
+
+Shared primitives live in `apps/web/src/components/ui`; product components live beside their
+feature. Use semantic tokens from `apps/web/src/app/globals.css`. Do not add hard-coded product
+colors or a second radius system.
 
 ```bash
 cd apps/web
 pnpm exec shadcn add <component>
 ```
 
-All foundational colors, fonts, spacing, radii, evidence tiers, and status values are CSS variables
-in `apps/web/src/app/globals.css`. Components must use semantic utilities such as `bg-background`,
-`text-muted-foreground`, `border-border`, and `text-tier-proof`; do not introduce hard-coded product
-colors or independent radius systems.
-
-## API conventions
-
-- Public product routes are under `/v1`.
-- Request and response schemas use Zod and appear in OpenAPI 3.1 documentation.
-- Errors use `application/problem+json` and RFC 9457 fields.
-- Machine ingestion will use scoped first-party credentials, never browser sessions.
-- Webhook routes must verify the raw body before parsing.
-- Logs must never include request/response bodies, cookies, auth headers, signed URLs, or prompts.
-
-## Machine token rotation
-
-Agent tokens are stored as Argon2id PHC hashes with a lookup prefix. Existing `sha256:` hashes are
-accepted only as a transition path: after a successful machine-token authentication, the control
-plane rewrites the row to Argon2id using the same token. Operators should rotate any agent token that
-never authenticates during the transition window, then remove any remaining `sha256:` rows.
-
 ## Verification
-
-Run the full handoff gate before opening a pull request:
 
 ```bash
 pnpm verify
-```
-
-Playwright and the full operational demo are separate because they start browsers, containers, and
-local services:
-
-```bash
 pnpm exec playwright install chromium
 pnpm test:e2e
 pnpm demo:acceptance
 ```
 
-The acceptance run ingests and evaluates the complete deterministic 50,000-event fixture in bounded
-batches. It verifies that every accepted event reaches the tenant ledger before running signed
-differential replay and the deterministic gate. The same end-to-end scenario runs weekly and on
-demand in `.github/workflows/acceptance.yml`.
+Use `pnpm test:resilience` with the Compose `resilience` profile for database failure and recovery.
+Run load tests only against an isolated, seeded environment.
 
-Run the database-failure resilience scenario with the dedicated Toxiproxy profile:
-
-```bash
-docker compose --profile resilience up -d toxiproxy
-pnpm test:resilience
-docker compose --profile resilience stop toxiproxy
-```
-
-The script proves readiness degradation, bounded request failure, and automatic recovery after the
-database connection is restored. Load-test thresholds and scenarios live in `tests/load`; validate
-the script locally with:
-
-```bash
-docker run --rm -v "$PWD:/workspace" -w /workspace \
-  grafana/k6:0.54.0 inspect tests/load/capture.js
-```
-
-Run it against an isolated, seeded environment before a release; never point destructive or
-write-heavy scenarios at a shared production tenant.
-
-The public smoke flow is browser → Next.js page → themed component rendering. The service smoke flow
-is HTTP → Fastify validation/error handling → health response; `/ready` adds a real Postgres boundary.
-The acceptance harness exercises machine authentication, tenant scoping, Argon2id token rotation,
-MinIO, real capture ingestion, ledger population, signed replay ingestion, and the deterministic
-gate, including signed coverage for active compatibility assertions. WorkOS, OpenAI, GitHub, and
-Slack need external sandbox credentials and are deliberately not contacted by that local run. Their
-mocked boundaries run in the ordinary test suite, and the opt-in `live-integrations` CI job exercises
-the real providers only when the corresponding repository environment and secrets are configured.
-OpenAI advisory-role tests use redacted receipt evidence and `store: false`; model output never owns
-fingerprints, evidence tiers, replay facts, or gate decisions.
-
-## Adding a feature
-
-1. Re-read the relevant PRD and technology-stack sections.
-2. Add or update shared Zod contracts first.
-3. Keep tenant context explicit at API, service, repository, and object-storage boundaries.
-4. Add unit, integration, browser, deterministic golden, or model eval coverage proportional to risk.
-5. Keep OpenAI calls behind schema validation and deterministic eligibility checks.
-6. Update docs and `.env.example` when setup changes.
+External WorkOS, OpenAI, GitHub, and Slack calls require sandbox credentials. The regular test suite
+uses mocked provider boundaries; local acceptance exercises machine auth, tenant scoping, capture,
+storage, replay, and the gate without contacting those providers.
