@@ -2,6 +2,8 @@
 
 Find accidental API contracts and test changes before they reach consumers.
 
+**Live app:** [hyrum.vercel.app](https://hyrum.vercel.app/)
+
 [![CI](https://github.com/Mithun1504/hyrum/actions/workflows/ci.yml/badge.svg)](https://github.com/Mithun1504/hyrum/actions/workflows/ci.yml)
 ![Node 22](https://img.shields.io/badge/Node-22-339933?logo=nodedotjs&logoColor=white)
 ![Go 1.24+](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white)
@@ -60,6 +62,23 @@ result to `tmp/demo-acceptance-report.json` and removes temporary services on ex
 - Every tenant-owned boundary carries `organization_id`; Postgres RLS adds containment.
 - Replay reports require immutable image digests and an Ed25519 signature. The server recomputes
   the decision.
+
+## Built with Codex and OpenAI
+
+- **Codex** was the engineering agent used to trace the repository, implement product flows,
+  refactor the workspace, write and repair tests, and run the release checks.
+- **GPT-5.6-sol** supplied the coding and reasoning model for that Codex work. It helped turn the
+  PRD and approved architecture into reviewed code, but it is not part of Hyrum's runtime decision
+  path.
+- **Hyrum's OpenAI integration** uses the official SDK, Responses API, GPT-5.6, and Structured
+  Outputs. It receives redacted evidence to cluster and name behaviors, propose evidence tiers,
+  prioritize replay cases, explain consumer impact, draft OpenAPI changes, and draft customer
+  notices. Hyrum validates every response against a Zod schema and supplied receipt IDs, records
+  the model and token usage, and keeps `store: false`.
+
+Deterministic Go extractors and differential replay remain authoritative. Model output cannot
+create behavior facts, promote unsupported evidence to T1, change replay results, or decide whether
+a gate blocks.
 
 ## Repository
 
