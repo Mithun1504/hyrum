@@ -96,7 +96,7 @@ describe("control plane", () => {
       new URL("https://api.workos.com/sso/jwks/client_123"),
     );
     expect(jwtVerifyMock).toHaveBeenCalledWith("session-token", "jwks", {
-      issuer: "https://api.workos.com/",
+      issuer: ["https://api.workos.com/", "https://api.workos.com"],
     });
     expect(response.json()).toMatchObject({
       actorId: "user-id",
