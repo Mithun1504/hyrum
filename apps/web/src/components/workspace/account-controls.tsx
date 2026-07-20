@@ -35,7 +35,7 @@ function AuthenticatedAccountControls({ label }: { label: string }) {
         disabled={pending}
         onClick={async () => {
           setPending(true);
-          await signOut();
+          await signOut({ returnTo: window.location.origin });
         }}
       >
         {pending ? "Signing out…" : "Sign out"}

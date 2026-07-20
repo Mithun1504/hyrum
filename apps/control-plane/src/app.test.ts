@@ -74,7 +74,7 @@ describe("control plane", () => {
     await app.close();
   });
 
-  it("accepts WorkOS session tokens without an audience claim", async () => {
+  it("accepts the current WorkOS issuer when the legacy client issuer is configured", async () => {
     jwtVerifyMock.mockResolvedValue({
       payload: {
         iss: "https://api.workos.com/",
@@ -84,7 +84,7 @@ describe("control plane", () => {
       },
     });
 
-    const app = await buildAuthTestApp("https://api.workos.com");
+    const app = await buildAuthTestApp("https://api.workos.com/user_management/client_123");
     const response = await app.inject({
       method: "GET",
       url: "/protected",
@@ -96,7 +96,12 @@ describe("control plane", () => {
       new URL("https://api.workos.com/sso/jwks/client_123"),
     );
     expect(jwtVerifyMock).toHaveBeenCalledWith("session-token", "jwks", {
-      issuer: ["https://api.workos.com/", "https://api.workos.com"],
+      issuer: [
+        "https://api.workos.com/user_management/client_123",
+        "https://api.workos.com/user_management/client_123/",
+        "https://api.workos.com/",
+        "https://api.workos.com",
+      ],
     });
     expect(response.json()).toMatchObject({
       actorId: "user-id",

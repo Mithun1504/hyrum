@@ -202,8 +202,15 @@ async function provisionHumanMembership(
 
 export const authPlugin = fp<AuthPluginOptions>(async (app, options) => {
   const clientId = options.clientId;
-  const issuer = new URL(options.issuer ?? defaultWorkosIssuer).href;
-  const acceptedIssuers = [issuer, issuer.endsWith("/") ? issuer.slice(0, -1) : `${issuer}/`];
+  const configuredIssuer = new URL(options.issuer ?? defaultWorkosIssuer).href;
+  const acceptedIssuers = Array.from(
+    new Set(
+      [configuredIssuer, defaultWorkosIssuer].flatMap((issuer) => [
+        issuer,
+        issuer.endsWith("/") ? issuer.slice(0, -1) : `${issuer}/`,
+      ]),
+    ),
+  );
   const jwksUrl = options.jwksUrl ? new URL(options.jwksUrl) : clientId && workosJwksUrl(clientId);
   const jwks = jwksUrl ? createRemoteJWKSet(jwksUrl) : undefined;
   const workos = options.workos;
