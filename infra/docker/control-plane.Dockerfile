@@ -1,4 +1,4 @@
-FROM node:22.22.1-alpine AS base
+FROM node:26.8.1-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
@@ -37,7 +37,7 @@ RUN pnpm install --offline --frozen-lockfile \
   && pnpm --filter @hyrum/control-plane deploy --legacy --prod /deploy/control-plane \
   && pnpm --filter @hyrum/worker deploy --legacy --prod /deploy/worker
 
-FROM node:22.22.1-alpine AS runner
+FROM node:26.8.1-alpine AS runner
 ENV NODE_ENV=production
 RUN apk upgrade --no-cache \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
