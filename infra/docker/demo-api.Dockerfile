@@ -1,4 +1,4 @@
-FROM node:22.18.0-alpine
+FROM node:26.8-alpine
 ARG DEMO_VARIANT
 RUN test "$DEMO_VARIANT" = "base" -o "$DEMO_VARIANT" = "candidate"
 WORKDIR /app
