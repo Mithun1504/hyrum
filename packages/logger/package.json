@@ -14,9 +14,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "pino": "^10.3.1"
+    "pino": "^10.4.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "vitest": "^5.0.3"
   }
 }
